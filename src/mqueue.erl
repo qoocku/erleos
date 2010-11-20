@@ -25,7 +25,8 @@
           recv/2,
           send/2,
           send/3,
-          props/1]).
+          props/1,
+          parse_options/1]).
 
 %%% ==========================================================================
 %%% E x p o r t e d  S e r v e r  F u n c t i o n s
@@ -45,12 +46,14 @@
 
 -record (mq, {ref = make_ref() :: reference(),
               hnd              :: any()}).
--opaque mq () :: #mq{}.
+-opaque mq ()          :: #mq{}.
+-type mqueue_options() :: [{size, pos_integer()}   |
+                           {msgsize, pos_integer()}|
+                           noblock | own].
+    
+-spec parse_options (mqueue_options()) -> {pos_integer(), pos_integer(), []|[noblock|own]}.
 
-open (QueueName) when is_list(QueueName) ->
-  open(QueueName, []).
-
-open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
+parse_options (Options) ->
   QueueSize  = case lists:keyfind(size, 1, Options) of
                  {size, Size} -> Size;
                  false        -> 8
@@ -66,16 +69,33 @@ open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
                              (Opt) ->
                                 exit({badarg, Opt})
                             end, Options),
+  {QueueSize, MaxMsgSize, Rest}.
+
+-spec open (string()) -> {ok, mq()}.
+-spec open (string(), mqueue_options()) -> {ok, mq()}.
+
+open (QueueName) when is_list(QueueName) ->
+  open(QueueName, []).
+
+open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
+  {QueueSize, MaxMsgSize, Rest} = parse_options(Options),
   case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, Rest) of
       {ok, Q} -> {ok, #mq{hnd = Q}};
       Other   -> Other
   end.
+
+-spec send (mq(), binary()) -> ok | {error, atom()}.
+-spec send (mq(), binary(), non_neg_integer()) -> ok | {error, atom()}.
 
 send (#mq{hnd = Q}, Binary) when is_binary(Binary) ->
   mqueue_drv:send(Q, Binary, 0).
 
 send (#mq{hnd = Q}, Binary, Priority) when is_binary(Binary), is_integer(Priority) ->
   mqueue_drv:send(Q, Binary, Priority).
+
+-type callback() :: fun((mq(), binary()) -> any()).
+-spec recv (mq()) -> {ok, binary()}.
+-spec recv (mq(), callback()) -> {error, any()} | any().
 
 recv (#mq{hnd = Q}) ->
   mqueue_drv:recv(Q).
@@ -86,11 +106,16 @@ recv (#mq{hnd = Q}, Callback) when is_function(Callback) ->
     Other     -> Other
   end.
 
+-spec close (mq()) -> ok | {error, atom()}.
+
 close (#mq{hnd = Q}) ->
   case mqueue_drv:close(Q) of
     0     -> ok;
     Error -> Error
   end.
+
+-type mqueue_props() :: [own|noblock].
+-spec props (mq()) -> mqueue_props().
 
 props (#mq{hnd = Q}) ->
   {ok, mqueue_drv:props(Q)}.
@@ -123,7 +148,8 @@ set_options (Srv, Options)
 get_options (Srv) when is_pid(Srv) orelse is_atom(Srv) ->
   gen_server:call(Srv, #options{oper = get}).
 
-stop (Srv) -> ok.
+stop (Srv) ->
+  gen_server:cast(Srv, shutdown).
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

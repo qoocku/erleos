@@ -37,22 +37,22 @@
 %%% ==========================================================================
 
 hello () ->
-  exit(nif_library_not_loaded).
+  nif_library_not_loaded.
 
 open (Name, QueueSize, MaxMsgSize, Options) ->
-  exit(nif_library_not_loaded).
+  nif_library_not_loaded.
 
 close (Handle) ->
-  exit(nif_library_not_loaded).
+  nif_library_not_loaded.
 
 recv (Handle) ->
-  exit(nif_library_not_loaded).
+  nif_library_not_loaded.
 
 send (Handle, Binary, Priority) when is_binary(Binary), is_integer(Priority) ->
-  exit(nif_library_not_loaded).
+  nif_library_not_loaded.
 
 props (Handle) ->
-  exit(nif_library_not_loaded).
+  nif_library_not_loaded.
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

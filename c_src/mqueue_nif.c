@@ -9,6 +9,7 @@
 #include <mqueue.h>
 #include <errno.h>
 #include <string.h>
+#include <stdio.h>
 
 #define MODULE "mqueue_drv"
 
@@ -30,25 +31,32 @@ struct mq_handle {
 static int
 load_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
-  mqd_type = enif_open_resource_type(env, MODULE, "mqd_t", NULL,
-      ERL_NIF_RT_CREATE, NULL);
+  ErlNifResourceFlags flags;
+  printf("*** load called\n");
+  mqd_type = enif_open_resource_type(env, NULL, "mqd_t", NULL,
+      ERL_NIF_RT_CREATE, &flags);
   return 0;
 }
 
 static int
 reload_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
+  printf("*** reload called\n");
   return 0;
 }
 
 static void
 unload_module(ErlNifEnv* env, void* priv_data)
 {
+  printf("*** unload called\n");
 }
 
 static int
 upgrade_module (ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info)
 {
+  ErlNifResourceFlags flags;
+  mqd_type = enif_open_resource_type(env, NULL, "mqd_t", NULL,
+        ERL_NIF_RT_TAKEOVER, &flags);
   return 0;
 }
 

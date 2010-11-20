@@ -20,12 +20,38 @@
 %%% B e h a v i o r  A P I
 %%% ==========================================================================
 
+-type receiver() :: pid() | atom() | {node, atom()}.
 -record (state, {queue        :: mqueue:mq(),
                  timeout  = 0 :: non_neg_integer(),
-                 receiver     :: pid() | atom()}).
+                 receiver     :: receiver()}).
+-type state()     :: #state{}.
+-type init_args() :: [string()        |
+                      receiver()      |
+                      {node(), atom()}|
+                      mqueue:mqueue_options() | 
+                      [{timeout, pos_integer()}]].
 
 init (Args) when is_list(Args) ->
-  {ok, #state{}}.
+  [QueueName, Receiver, Options]   = Args,
+  {MQOptions, MyOptions}           = lists:foldl(fun
+                                                   (Item = {Key, _}, {MQo, MyO}) when Key =:= timeout ;
+                                                                                      Key =:= receiver ->
+                                                     {MQo, [Item|MyO]};
+                                                   ({_, _} = Item, _) ->
+                                                     exit({badarg, Item});
+                                                   (Option, {MQo, MyO}) ->
+                                                     {[Option|MQo], MyO}
+                                                 end, {[], []}, Options),
+  {QueueSize, MaxMsgSize, Options} = mqueue:parse_options(MQOptions),
+  {ok, Q} = mqueue_drv:open(QueueName, QueueSize, MaxMsgSize,
+                            case lists:member(noblock, Options) of
+                              false -> [noblock|Options];
+                              true  -> Options
+                            end),
+  erlang:start_timer(Timeout = proplists:get_value(timeout, MyOptions, 10), self(), tick),
+  {ok, #state{queue    = Q,
+              timeout  = Timeout,
+              receiver = Receiver}}.
 
 handle_call (#options{oper = get}, _From, State = #state{queue = Q}) ->
   {ok, P} = mqueue:props(Q),
@@ -37,9 +63,11 @@ handle_call (#options{oper = set, args = Args}, _From, State) ->
                    end, State, Args),
   {reply, ok, NS}.
 
-
-handle_cast ({timeout, _, tick}, State = #state{queue = Q, receiver = R}) ->
-  Reply = case mqueue:recv(Q) of
+handle_cast ({timeout, _, tick}, State = #state{queue =    Q,
+                                                receiver = R,
+                                                timeout  = T}) ->
+  erlang:start_timer(R, T, tick),
+  Reply = case mqueue_drv:recv(Q) of
             {error, eagain} -> 
               noreply;
             {ok, Bin} ->
@@ -51,10 +79,12 @@ handle_cast ({timeout, _, tick}, State = #state{queue = Q, receiver = R}) ->
   case Reply of
     noreply        -> {noreply, State};
     {stop, Reason} -> {stop, Reason, State}
-  end.
+  end;
+handle_cast (shutdown, State) ->
+  {stop, normal, State}.
 
 terminate (Reason, State = #state{queue =Q}) ->
-  mqueue:close(Q).
+  mqueue_drv:close(Q).
 
 code_change (_OldVsn, State, _Extra) ->
   {ok, State}.
