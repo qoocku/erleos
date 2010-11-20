@@ -56,8 +56,8 @@ open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
                              (ValidOpt) when ValidOpt =:= noblock ;
                                               ValidOpt =:= own ->
                                 true;
-                             (_) ->
-                                false
+                             (Opt) ->
+                                exit({badarg, Opt})
                             end, Options),
   case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, Rest) of
       {ok, Q} -> {ok, #queue{hnd = Q}};

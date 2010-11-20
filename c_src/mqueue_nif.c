@@ -35,8 +35,14 @@ load_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
   return 0;
 }
 
+static int
+reload_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
+{
+  return 0;
+}
+
 static void
-unload_module(ErlNifEnv* env, void** priv_data)
+unload_module(ErlNifEnv* env, void* priv_data)
 {
 }
 
@@ -53,6 +59,46 @@ make_tuple2_result (ErlNifEnv* env, const char* fst, const char* snd)
   enif_make_existing_atom(env, fst, &atom, ERL_NIF_LATIN1);
   string = enif_make_string(env, snd, ERL_NIF_LATIN1);
   return enif_make_tuple2(env, atom, string);
+}
+
+static ERL_NIF_TERM
+make_atom (ErlNifEnv* env, const char* str)
+{
+  ERL_NIF_TERM atom;
+  if (!enif_make_existing_atom(env, str, &atom, ERL_NIF_LATIN1))
+    atom = enif_make_atom(env, str);
+  return atom;
+}
+
+static ERL_NIF_TERM
+error_atom (ErlNifEnv* env, int err)
+{
+  const char* str;
+  switch (err) {
+  case EACCES:
+    str = "eaccess"; break;
+  case EEXIST:
+    str = "eexist"; break;
+  case EINVAL:
+    str = "einval"; break;
+  case EMFILE:
+    str = "emfile"; break;
+  case ENAMETOOLONG:
+    str = "emfile"; break;
+  case ENFILE:
+    str = "enfile"; break;
+  case ENOENT:
+    str = "enoent"; break;
+  case ENOMEM:
+    str = "enomem"; break;
+  case ENOSPC:
+    str = "enospc"; break;
+  case EAGAIN:
+    str = "eagain"; break;
+  default:
+    str = (const char*)strerror(err);
+  }
+  return make_atom(env, str);
 }
 
 static ERL_NIF_TERM
@@ -87,7 +133,7 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         enif_get_list_cell(env, tail, &head, &tl);
         tail = tl;
         if (!enif_is_atom(env, head))
-          return make_tuple2_result(env, "error", "Invalid option");
+          return make_tuple2_result(env, "error", "Invalid option type. Should be atom");
         enif_get_atom(env, head, buf, 32, ERL_NIF_LATIN1);
         if (strcmp(buf, "noblock") == 0)
           blocked = 0;
@@ -99,20 +145,18 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   result->blocked      = blocked;
   result->owned        = owned;
   int flags = O_RDWR | O_CREAT;
-  if (blocked) flags |= O_NONBLOCK;
+  if (!blocked) flags |= O_NONBLOCK;
   result->queue        = mq_open(name, flags, S_IWUSR | S_IRUSR, &attr);
   result->max_msg_size = attr.mq_msgsize;
   strncpy(result->name, name, len+1);
   ERL_NIF_TERM tuple;
   if (result->queue == -1)
     {
-       tuple = make_tuple2_result(env, "error", (const char*) strerror(errno));
+      tuple = enif_make_tuple2(env, make_atom(env, "error"), error_atom(env, errno));
     }
   else
     {
-      ERL_NIF_TERM atom;
-      enif_make_existing_atom(env, "ok", &atom, ERL_NIF_LATIN1);
-      tuple = enif_make_tuple2(env, atom, enif_make_resource(env, result));
+      tuple = enif_make_tuple2(env, make_atom(env, "ok"), enif_make_resource(env, result));
     }
   enif_free(name);
   enif_release_resource(result);
@@ -131,7 +175,7 @@ _close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (result == 0)
     return enif_make_int(env, 0);
   else
-    return make_tuple2_result(env, "error", (const char*)strerror(errno));
+    return enif_make_tuple2(env, make_atom(env, "error"), error_atom(env, errno));
 }
 
 static ERL_NIF_TERM
@@ -144,15 +188,14 @@ _receive(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   ERL_NIF_TERM tuple;
   if (size == -1)
     {
-      tuple = make_tuple2_result(env, "error", (const char*) strerror(errno));
+      tuple = enif_make_tuple2(env, make_atom(env, "error"), error_atom(env, errno));
     }
   else
     {
-      ERL_NIF_TERM bin, atom;
+      ERL_NIF_TERM bin;
       void* data = enif_make_new_binary(env, size, &bin);
       memcpy(data, buffer, size);
-      enif_make_existing_atom(env, "ok", &atom, ERL_NIF_LATIN1);
-      tuple = enif_make_tuple2(env, atom, bin);
+      tuple = enif_make_tuple2(env, make_atom(env, "ok"), bin);
     }
   enif_free(buffer);
   return tuple;
@@ -171,15 +214,9 @@ _send(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_get_int(env, argv[2], &prio))
     return make_tuple2_result(env, "error", "Invalid arg #3: should be an integer");
   int status = mq_send(handle->queue, (const char*)bin.data, bin.size, prio);
-  ERL_NIF_TERM atom;
-  if (status == EAGAIN) {
-    ERL_NIF_TERM reason;
-    enif_make_existing_atom(env, "error", &atom, ERL_NIF_LATIN1);
-    enif_make_existing_atom(env, "eagain", &reason, ERL_NIF_LATIN1);
-    return enif_make_tuple2(env, atom, reason);
-  }
-  enif_make_existing_atom(env, "ok", &atom, ERL_NIF_LATIN1);
-  return atom;
+  if (status != 0)
+    return enif_make_tuple2(env, make_atom(env, "error"), error_atom(env, errno));
+  return make_atom(env, "ok");
 }
 
 static ERL_NIF_TERM
@@ -209,4 +246,4 @@ static ErlNifFunc nif_funcs[] =
 
 ERL_NIF_INIT(mqueue_drv,
              nif_funcs,
-             load_module,NULL, upgrade_module, unload_module);
+             load_module, reload_module, upgrade_module, unload_module);
