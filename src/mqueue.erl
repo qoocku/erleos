@@ -22,6 +22,7 @@
           open/2,
           close/1,
           recv/1,
+          recv/2,
           send/2,
           send/3,
           props/1]).
@@ -71,6 +72,12 @@ send (#queue{hnd = Q}, Binary, Priority) when is_binary(Binary), is_integer(Prio
 
 recv (#queue{hnd = Q}) ->
   mqueue_drv:recv(Q).
+
+recv (#queue{hnd = Q}, Callback) when is_function(Callback) ->
+  case mqueue_drv:recv(Q) of
+    {ok, Msg} -> Callback(Msg);
+    Other     -> Other
+  end.
 
 close (#queue{hnd = Q}) ->
   case mqueue_drv:close(Q) of
