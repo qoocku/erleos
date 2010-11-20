@@ -1,5 +1,7 @@
-#Fri Nov 19 14:13:45 CET 2010
+#Sat Nov 20 11:15:35 CET 2010
 backend_version=R14B
+compiler/allOptions={i,".."}
+compiler/export_all=false
 eclipse.preferences.version=1
 external_includes=
 external_modules=

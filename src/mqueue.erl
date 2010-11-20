@@ -12,7 +12,7 @@
 %%% ==========================================================================
 
 %%%-include_lib ().
-%%%-include ().
+-include ("proto/mqueue.hrl").
 
 %%% ==========================================================================
 %%% E x p o r t e d  A P I  F u n c t i o n s
@@ -28,17 +28,24 @@
           props/1]).
 
 %%% ==========================================================================
-%%% E x p o r t e d  I n t e rn a l  F u n c t i o n s
+%%% E x p o r t e d  S e r v e r  F u n c t i o n s
 %%% ==========================================================================
 
--export ([]).
+-export ([start/1,
+          start/2,
+          start/3,
+          start_link/3,
+          stop/1,
+          set_options/2,
+          get_options/1]).
 
 %%% ==========================================================================
 %%% A P I  F u n c ti o n s
 %%% ==========================================================================
 
--record (queue, {ref = make_ref() :: reference(),
-                 hnd}).
+-record (mq, {ref = make_ref() :: reference(),
+              hnd              :: any()}).
+-opaque mq () :: #mq{}.
 
 open (QueueName) when is_list(QueueName) ->
   open(QueueName, []).
@@ -60,33 +67,63 @@ open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
                                 exit({badarg, Opt})
                             end, Options),
   case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, Rest) of
-      {ok, Q} -> {ok, #queue{hnd = Q}};
+      {ok, Q} -> {ok, #mq{hnd = Q}};
       Other   -> Other
   end.
 
-send (#queue{hnd = Q}, Binary) when is_binary(Binary) ->
+send (#mq{hnd = Q}, Binary) when is_binary(Binary) ->
   mqueue_drv:send(Q, Binary, 0).
 
-send (#queue{hnd = Q}, Binary, Priority) when is_binary(Binary), is_integer(Priority) ->
+send (#mq{hnd = Q}, Binary, Priority) when is_binary(Binary), is_integer(Priority) ->
   mqueue_drv:send(Q, Binary, Priority).
 
-recv (#queue{hnd = Q}) ->
+recv (#mq{hnd = Q}) ->
   mqueue_drv:recv(Q).
 
-recv (#queue{hnd = Q}, Callback) when is_function(Callback) ->
+recv (#mq{hnd = Q}, Callback) when is_function(Callback) ->
   case mqueue_drv:recv(Q) of
     {ok, Msg} -> Callback(Msg);
     Other     -> Other
   end.
 
-close (#queue{hnd = Q}) ->
+close (#mq{hnd = Q}) ->
   case mqueue_drv:close(Q) of
     0     -> ok;
     Error -> Error
   end.
 
-props (#queue{hnd = Q}) ->
+props (#mq{hnd = Q}) ->
   {ok, mqueue_drv:props(Q)}.
+
+%%% ==========================================================================
+%%% S e r v e r  A P I
+%%% ==========================================================================
+
+start (QueueName) when is_list(QueueName) ->
+  start(QueueName, self()).
+
+start (QueueName, Receiver) when is_list(QueueName),
+                                  is_pid(Receiver) ->
+  start(QueueName, Receiver, []).
+
+start (QueueName, Receiver, Options) when is_list(QueueName),
+                                          is_pid(Receiver),
+                                          is_list(Options) ->
+  gen_server:start(mqueue_srv, [QueueName, Receiver, Options], []).
+
+start_link (QueueName, Receiver, Options) when is_list(QueueName),
+                                               is_pid(Receiver),
+                                               is_list(Options) ->
+  gen_server:start_link(mqueue_srv, [QueueName, Receiver, Options], []).
+
+set_options (Srv, Options)
+  when (is_pid(Srv) orelse is_atom(Srv)) andalso is_list(Options) ->
+  gen_server:call(Srv, #options{oper = set, args = Options}).
+
+get_options (Srv) when is_pid(Srv) orelse is_atom(Srv) ->
+  gen_server:call(Srv, #options{oper = get}).
+
+stop (Srv) -> ok.
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s
