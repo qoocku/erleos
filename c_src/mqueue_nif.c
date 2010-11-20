@@ -19,6 +19,13 @@ hello(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 ErlNifResourceType* mqd_type;
+struct mq_handle {
+  mqd_t  queue;
+  int    owned;
+  ssize_t max_msg_size;
+  char   name[256];
+  int    blocked;
+};
 
 static int
 load_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
@@ -33,75 +40,173 @@ unload_module(ErlNifEnv* env, void** priv_data)
 {
 }
 
+static int
+upgrade_module (ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info)
+{
+  return 0;
+}
+
+static ERL_NIF_TERM
+make_tuple2_result (ErlNifEnv* env, const char* fst, const char* snd)
+{
+  ERL_NIF_TERM atom, string;
+  enif_make_existing_atom(env, fst, &atom, ERL_NIF_LATIN1);
+  string = enif_make_string(env, snd, ERL_NIF_LATIN1);
+  return enif_make_tuple2(env, atom, string);
+}
+
 static ERL_NIF_TERM
 _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   struct mq_attr attr;
   attr.mq_flags = 0; /* Flags: 0 or O_NONBLOCK */
-  enif_get_long(env, argv[1], &attr.mq_maxmsg); /* Max. # of messages on queue */
-  enif_get_long(env, argv[2], &attr.mq_msgsize); /* Max. message size (bytes) */
+  if (!enif_get_long(env, argv[1], &attr.mq_maxmsg)) /* Max. # of messages on queue */
+    return make_tuple2_result(env, "error", "Invalid argument #2: should be an integer");
+  if (!enif_get_long(env, argv[2], &attr.mq_msgsize)) /* Max. message size (bytes) */
+    return make_tuple2_result(env, "error", "Invalid argument #3: should be an integer");
   attr.mq_curmsgs = 0; /* # of messages currently in queue */
-  mqd_t* result = enif_alloc_resource(mqd_type, sizeof(mqd_t));
-  char name[512];
-  enif_get_string(env, argv[0], name, 512, ERL_NIF_LATIN1);
-  *result = mq_open(name, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR, &attr);
-  ERL_NIF_TERM tuple[2];
-  if (*result == -1)
+  unsigned len;
+  if (!enif_get_list_length(env, argv[0], &len))
+    return make_tuple2_result(env, "error", "Invalid argument #1: should be a string");
+  if (len > 255)
+    return make_tuple2_result(env, "error", "Queue name too long");
+  char* name = enif_alloc(len);
+  if (!enif_get_string(env, argv[0],  name, len+1, ERL_NIF_LATIN1))
+    return make_tuple2_result(env, "error", "Invalid argument #1: should be a string");
+  unsigned optlen;
+  if (!enif_get_list_length(env, argv[3], &optlen))
+    return make_tuple2_result(env, "error", "Invalid argument #4: should be a list of options");
+  int owned = 0, blocked = 1;
+  {
+    int i;
+    ERL_NIF_TERM tail = argv[3];
+    for (i = 0; i < optlen; i++)
+      {
+        char buf[32];
+        ERL_NIF_TERM head, tl;
+        enif_get_list_cell(env, tail, &head, &tl);
+        tail = tl;
+        if (!enif_is_atom(env, head))
+          return make_tuple2_result(env, "error", "Invalid option");
+        enif_get_atom(env, head, buf, 32, ERL_NIF_LATIN1);
+        if (strcmp(buf, "noblock") == 0)
+          blocked = 0;
+        if (strcmp(buf, "own") == 0)
+          owned = 1;
+      }
+  }
+  struct mq_handle* result = enif_alloc_resource(mqd_type, sizeof(struct mq_handle));
+  result->blocked      = blocked;
+  result->owned        = owned;
+  int flags = O_RDWR | O_CREAT;
+  if (blocked) flags |= O_NONBLOCK;
+  result->queue        = mq_open(name, flags, S_IWUSR | S_IRUSR, &attr);
+  result->max_msg_size = attr.mq_msgsize;
+  strncpy(result->name, name, len+1);
+  ERL_NIF_TERM tuple;
+  if (result->queue == -1)
     {
-      tuple[0] = enif_make_atom(env, "error");
-      tuple[1] = enif_make_string(env, (const char*) strerror(errno),
-          ERL_NIF_LATIN1);
+       tuple = make_tuple2_result(env, "error", (const char*) strerror(errno));
     }
   else
     {
-      tuple[0] = enif_make_atom(env, "ok");
-      tuple[1] = enif_make_resource(env, result);
+      ERL_NIF_TERM atom;
+      enif_make_existing_atom(env, "ok", &atom, ERL_NIF_LATIN1);
+      tuple = enif_make_tuple2(env, atom, enif_make_resource(env, result));
     }
+  enif_free(name);
   enif_release_resource(result);
-  return enif_make_tuple_from_array(env, tuple, 2);
+  return tuple;
 }
 
 static ERL_NIF_TERM
 _close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-  mqd_t* queue;
-  enif_get_resource(env, argv[0], mqd_type, (void**) &queue);
-  int result = mq_close(*queue);
-  enif_release_resource(queue);
-  return enif_make_int(env, result);
+  struct mq_handle* handle;
+  enif_get_resource(env, argv[0], mqd_type, (void**) &handle);
+  int result = mq_close(handle->queue);
+  if (result == 0 && handle->owned)
+    result = mq_unlink(handle->name);
+  enif_release_resource(handle);
+  if (result == 0)
+    return enif_make_int(env, 0);
+  else
+    return make_tuple2_result(env, "error", (const char*)strerror(errno));
 }
 
 static ERL_NIF_TERM
 _receive(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-  mqd_t* queue;
-  enif_get_resource(env, argv[0], mqd_type, (void**)&queue);
-  char buffer[4096];
-  ssize_t result = mq_receive(*queue, buffer, 4096, 0);
-  ERL_NIF_TERM tuple[2];
-  if (result == -1)
+  struct mq_handle* handle;
+  enif_get_resource(env, argv[0], mqd_type, (void**)&handle);
+  void* buffer = enif_alloc(handle->max_msg_size);
+  ssize_t size  = mq_receive(handle->queue, buffer, handle->max_msg_size, 0);
+  ERL_NIF_TERM tuple;
+  if (size == -1)
     {
-      tuple[0] = enif_make_atom(env, "error");
-      tuple[1] = enif_make_string(env, (const char*) strerror(errno),
-          ERL_NIF_LATIN1);
+      tuple = make_tuple2_result(env, "error", (const char*) strerror(errno));
     }
   else
     {
-      tuple[0] = enif_make_atom(env, "ok");
-      ErlNifBinary bin;
-      enif_alloc_binary(result, &bin);
-      memcpy(bin.data, buffer, result);
-      tuple[1] = enif_make_binary(env, &bin);
+      ERL_NIF_TERM bin, atom;
+      void* data = enif_make_new_binary(env, size, &bin);
+      memcpy(data, buffer, size);
+      enif_make_existing_atom(env, "ok", &atom, ERL_NIF_LATIN1);
+      tuple = enif_make_tuple2(env, atom, bin);
     }
-  return enif_make_tuple_from_array(env, tuple, 2);
+  enif_free(buffer);
+  return tuple;
+}
+
+static ERL_NIF_TERM
+_send(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+  struct mq_handle* handle;
+  if (!enif_get_resource(env, argv[0], mqd_type, (void**)&handle))
+    return make_tuple2_result(env, "error", "Invalid arg #1: should be a queue handle");
+  ErlNifBinary bin;
+  if (!enif_inspect_binary(env, argv[1], &bin))
+    return make_tuple2_result(env, "error", "Invalid arg #2: should be a binary");
+  int prio;
+  if (!enif_get_int(env, argv[2], &prio))
+    return make_tuple2_result(env, "error", "Invalid arg #3: should be an integer");
+  int status = mq_send(handle->queue, (const char*)bin.data, bin.size, prio);
+  ERL_NIF_TERM atom;
+  if (status == EAGAIN) {
+    ERL_NIF_TERM reason;
+    enif_make_existing_atom(env, "error", &atom, ERL_NIF_LATIN1);
+    enif_make_existing_atom(env, "eagain", &reason, ERL_NIF_LATIN1);
+    return enif_make_tuple2(env, atom, reason);
+  }
+  enif_make_existing_atom(env, "ok", &atom, ERL_NIF_LATIN1);
+  return atom;
+}
+
+static ERL_NIF_TERM
+_props (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+  struct mq_handle* handle;
+  if (!enif_get_resource(env, argv[0], mqd_type, (void**)&handle))
+    return make_tuple2_result(env, "error", "Invalid arg #1: should be a queue handle");
+  ERL_NIF_TERM arr[2];
+  int len = 0;
+  if (handle->owned)
+    enif_make_existing_atom(env, "own", &arr[len++], ERL_NIF_LATIN1);
+  if (!handle->blocked)
+    enif_make_existing_atom(env, "noblock", &arr[len++], ERL_NIF_LATIN1);
+  return enif_make_list_from_array(env, arr, len);
 }
 
 static ErlNifFunc nif_funcs[] =
   {
     { "hello", 0, hello },
-    { "open", 3, _open },
+    { "open", 4, _open },
     { "close", 1, _close },
-    { "recv", 1, _receive }
+    { "recv", 1, _receive },
+    { "send", 3, _send },
+    { "props", 1, _props }
   };
 
-ERL_NIF_INIT(mqueue_drv,nif_funcs,load_module,NULL,NULL,unload_module)
+ERL_NIF_INIT(mqueue_drv,
+             nif_funcs,
+             load_module,NULL, upgrade_module, unload_module);
