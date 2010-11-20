@@ -11,6 +11,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "can.h"
+#include "canmsg.h"
 #include "erl_nif.h"
 #include "nif_utils.c"
 
