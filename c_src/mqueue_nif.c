@@ -19,7 +19,7 @@ hello(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return enif_make_string(env, "Hello world!", ERL_NIF_LATIN1);
 }
 
-ErlNifResourceType* mqd_type;
+ErlNifResourceType* mqd_type = 0;
 struct mq_handle {
   mqd_t  queue;
   int    owned;
@@ -179,7 +179,6 @@ _close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   int result = mq_close(handle->queue);
   if (result == 0 && handle->owned)
     result = mq_unlink(handle->name);
-  enif_release_resource(handle);
   if (result == 0)
     return enif_make_int(env, 0);
   else

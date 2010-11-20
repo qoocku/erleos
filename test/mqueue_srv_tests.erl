@@ -12,7 +12,7 @@
 
 init_test () ->
   Result = mqueue_srv:init(["/qq", self(), [own]]),
-  ?assertMatch({ok, _}, ?debugVal(Result)),
+  ?assertMatch({ok, _}, Result),
   receive
     {timeout, _, tick} -> ok
   after

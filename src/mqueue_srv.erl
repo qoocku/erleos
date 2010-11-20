@@ -11,6 +11,7 @@
 -export ([init/1,
           handle_call/3,
           handle_cast/2,
+          handle_info/2,
           terminate/2,
           code_change/3]).
 
@@ -34,28 +35,29 @@
 init (Args) when is_list(Args) ->
   [QueueName, Receiver, Options]   = Args,
   {MQOptions, MyOptions}           = lists:foldl(fun
-                                                   (Item = {Key, _}, {MQo, MyO}) when Key =:= timeout ;
-                                                                                      Key =:= receiver ->
+                                                   (Item = {Key, _}, {MQo, MyO}) when Key =:= timeout ->
                                                      {MQo, [Item|MyO]};
                                                    ({_, _} = Item, _) ->
                                                      exit({badarg, Item});
                                                    (Option, {MQo, MyO}) ->
                                                      {[Option|MQo], MyO}
                                                  end, {[], []}, Options),
-  {QueueSize, MaxMsgSize, Options} = mqueue:parse_options(MQOptions),
+  {QueueSize, MaxMsgSize, Rest} = mqueue:parse_options(MQOptions),
   {ok, Q} = mqueue_drv:open(QueueName, QueueSize, MaxMsgSize,
-                            case lists:member(noblock, Options) of
-                              false -> [noblock|Options];
-                              true  -> Options
+                            case lists:member(noblock, Rest) of
+                              false -> [noblock|Rest];
+                              true  -> Rest
                             end),
   erlang:start_timer(Timeout = proplists:get_value(timeout, MyOptions, 10), self(), tick),
   {ok, #state{queue    = Q,
               timeout  = Timeout,
               receiver = Receiver}}.
 
-handle_call (#options{oper = get}, _From, State = #state{queue = Q}) ->
-  {ok, P} = mqueue:props(Q),
-  {reply, P, State};
+handle_call (#options{oper = get}, _From, State = #state{queue    = Q,
+                                                         timeout  = T,
+                                                         receiver = R}) ->
+  P = mqueue_drv:props(Q),
+  {reply, [{timeout, T}, {receiver, R}] ++ P, State};
 handle_call (#options{oper = set, args = Args}, _From, State) ->
   NS = lists:foldl(fun
                      ({timeout, T}, S)  -> S#state{timeout = T};
@@ -63,25 +65,27 @@ handle_call (#options{oper = set, args = Args}, _From, State) ->
                    end, State, Args),
   {reply, ok, NS}.
 
-handle_cast ({timeout, _, tick}, State = #state{queue =    Q,
+handle_cast (shutdown, State) ->
+  {stop, normal, State}.
+
+handle_info ({timeout, _, tick}, State = #state{queue =    Q,
                                                 receiver = R,
                                                 timeout  = T}) ->
-  erlang:start_timer(R, T, tick),
   Reply = case mqueue_drv:recv(Q) of
-            {error, eagain} -> 
+            {error, eagain} ->             
               noreply;
             {ok, Bin} ->
-              R ! #mqueue{queue = Q, msg = Bin},
+              R ! #mqueue{source = self(), msg = Bin},
               noreply;
             {error, Other} ->
+              error_logger:error_report([{mqueue_srv, self()}, {error, Other}]),
               {stop, Other}
           end,
+  erlang:start_timer(T, self(), tick),
   case Reply of
     noreply        -> {noreply, State};
     {stop, Reason} -> {stop, Reason, State}
-  end;
-handle_cast (shutdown, State) ->
-  {stop, normal, State}.
+  end.
 
 terminate (Reason, State = #state{queue =Q}) ->
   mqueue_drv:close(Q).

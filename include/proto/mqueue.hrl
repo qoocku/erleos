@@ -3,6 +3,6 @@
 
 -record (options, {oper = get :: [get|set],
                    args = []  :: [any()]}).
--record (mqueue, {queue      :: any(),
+-record (mqueue, {source     :: pid(),
                   msg = <<>> :: binary()}).
 -endif.

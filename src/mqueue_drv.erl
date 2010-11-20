@@ -40,19 +40,19 @@ hello () ->
   nif_library_not_loaded.
 
 open (Name, QueueSize, MaxMsgSize, Options) ->
-  nif_library_not_loaded.
+  {ok, <<>>}.
 
 close (Handle) ->
-  nif_library_not_loaded.
+  0.
 
 recv (Handle) ->
-  nif_library_not_loaded.
+  {ok, <<>>}.
 
 send (Handle, Binary, Priority) when is_binary(Binary), is_integer(Priority) ->
-  nif_library_not_loaded.
+  ok.
 
 props (Handle) ->
-  nif_library_not_loaded.
+  [].
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

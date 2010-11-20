@@ -102,7 +102,7 @@ recv (#mq{hnd = Q}) ->
 
 recv (#mq{hnd = Q}, Callback) when is_function(Callback) ->
   case mqueue_drv:recv(Q) of
-    {ok, Msg} -> Callback(Msg);
+    {ok, Msg} -> Callback(Q, Msg);
     Other     -> Other
   end.
 
@@ -110,12 +110,12 @@ recv (#mq{hnd = Q}, Callback) when is_function(Callback) ->
 
 close (#mq{hnd = Q}) ->
   case mqueue_drv:close(Q) of
-    0     -> ok;
-    Error -> Error
+    0              -> ok;
+    E = {error, _} -> E
   end.
 
 -type mqueue_props() :: [own|noblock].
--spec props (mq()) -> mqueue_props().
+-spec props (mq()) -> {ok, mqueue_props()}.
 
 props (#mq{hnd = Q}) ->
   {ok, mqueue_drv:props(Q)}.
