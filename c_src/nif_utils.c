@@ -54,3 +54,26 @@ errno_atom (ErlNifEnv* env, int err)
   }
   return make_atom(env, str);
 }
+
+static void
+debug_enif_type (ErlNifEnv* env, ERL_NIF_TERM e)
+{
+  if (enif_is_atom(env, e))
+      enif_fprintf(stdout, "atom\n");
+    else if (enif_is_binary(env, e))
+      enif_fprintf(stdout, "bin\n");
+    else if (enif_is_empty_list(env, e))
+      enif_fprintf(stdout, "empty list\n");
+    else if (enif_is_fun(env, e))
+      enif_fprintf(stdout, "fun\n");
+    else if (enif_is_pid(env, e))
+      enif_fprintf(stdout, "pid\n");
+    else if (enif_is_port(env, e))
+      enif_fprintf(stdout, "port\n");
+    else if (enif_is_ref(env, e))
+      enif_fprintf(stdout, "ref\n");
+    else if (enif_is_tuple(env, e))
+      enif_fprintf(stdout, "tuple\n");
+    else if (enif_is_list(env, e))
+      enif_fprintf(stdout, "list\n");
+}

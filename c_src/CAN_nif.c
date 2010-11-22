@@ -70,6 +70,20 @@ upgrade_module(ErlNifEnv* env, void** priv_data, void** old_priv_data,
 }
 
 static ERL_NIF_TERM
+_check_tuple (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+  const ERL_NIF_TERM* items;
+  int arity, i;
+  enif_get_tuple(env, argv[0], &arity, &items);
+  enif_fprintf(stdout, "arity: %i\n", arity);
+  for (i = 0; i < arity; i++)
+    {
+      debug_enif_type(env, items[i]);
+    }
+  return enif_make_int(env, arity);
+}
+
+static ERL_NIF_TERM
 _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   CAN_handle* handle;
@@ -185,20 +199,24 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   ERL_NIF_TERM messages;
   unsigned int i, length, total_size = 0;
   ERL_NIF_TERM result;
-  enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
+  //enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
   messages = argv[1];
   enif_get_list_length(env, messages, &length);
   canmsg_t* buffer = enif_alloc(length * sizeof(canmsg_t));
+  ERL_NIF_TERM list = messages;
   for (i = 0; i < length; i++)
     {
       canmsg_t* can_msg = &buffer[i];
       int arity;
       unsigned int target;
       ErlNifBinary msg;
-      ERL_NIF_TERM head;
-      ERL_NIF_TERM items[2];
-      enif_get_list_cell(env, messages, &head, &messages);
-      if (!enif_get_tuple(env, head, &arity, (const ERL_NIF_TERM**)&items))
+      ERL_NIF_TERM head, tail;
+      const ERL_NIF_TERM* items;
+      enif_get_list_cell(env, list, &head, &tail);
+      list = tail;
+      debug_enif_type(env, head);
+      debug_enif_type(env, tail);
+      if (!enif_get_tuple(env, head, &arity, &items))
         {
           result = enif_make_int(env, -1000);
           goto end;
@@ -208,26 +226,10 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
           result = enif_make_int(env, -1001);
           goto end;
         }
+      debug_enif_type(env, items[0]);
+      debug_enif_type(env, items[1]);
       if (!enif_get_uint(env, items[0], &target))
         {
-	  if (enif_is_atom(env, items[0]))
-	    enif_fprintf(stdout, "atom\n");
-          else if (enif_is_binary(env, items[0]))
-	    enif_fprintf(stdout, "bin\n");
-          else if (enif_is_empty_list(env, items[0]))
-	    enif_fprintf(stdout, "empty list\n");
-          else if (enif_is_fun(env, items[0]))
-	    enif_fprintf(stdout, "fun\n");
-          else if (enif_is_pid(env, items[0]))
-	    enif_fprintf(stdout, "pid\n");
-          else if (enif_is_port(env, items[0]))
-	    enif_fprintf(stdout, "port\n");
-          else if (enif_is_ref(env, items[0]))
-	    enif_fprintf(stdout, "ref\n");
-          else if (enif_is_tuple(env, items[0]))
-	    enif_fprintf(stdout, "tuple\n");
-          else if (enif_is_list(env, items[0]))
-	    enif_fprintf(stdout, "list\n");
           result = enif_make_int(env, -1002);
           goto end;
         }
@@ -367,7 +369,8 @@ static ErlNifFunc nif_funcs[] =
     { "recv", 2, _recv },
     { "close", 1, _close },
     { "listener", 4, _listener },
-    { "translate_errno", 1, _translate_errno }
+    { "translate_errno", 1, _translate_errno },
+    { "check_tuple", 1, _check_tuple }
   };
 
 ERL_NIF_INIT(CAN_drv, nif_funcs, load_module, reload_module, upgrade_module, unload_module);
