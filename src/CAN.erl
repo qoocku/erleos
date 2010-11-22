@@ -11,6 +11,7 @@
          open/1,
          open/2,
          open/3,
+         open/4,
          send/2,
          recv/1,
          recv/2,
@@ -26,32 +27,42 @@ open () ->
   open (case application:get_env(can_device_path) of
           undefined -> "/dev/can0";
           Other -> Other
-        end).
+        end, self()).
 
-open (DevicePath) ->
-  open (DevicePath, case application:get_env(can_baudrate) of
-                      undefined -> 1000000;
-                      Other     -> Other
-                    end).
+open (DevicePath) when is_list(DevicePath) ->
+  open (DevicePath, self(), case application:get_env(can_baudrate) of
+                              undefined -> 1000000;
+                              Other     -> Other
+                            end).
 
-open (DevicePath, BaudRate) ->
-  open (DevicePath, BaudRate, case application:get_env(can_mask) of
-                                undefined -> 0;
-                                Other     -> Other
-                              end).
+open (DevicePath, BaudRate) when is_list(DevicePath),
+                                 is_integer(BaudRate),
+                                 BaudRate > 0 ->
+  open (DevicePath, self(), BaudRate,
+        case application:get_env(can_mask) of
+          undefined -> 0;
+          Other     -> Other
+        end);
+open (DevicePath, Receiver) when is_list(DevicePath) ->
+  open (DevicePath, Receiver, case application:get_env(can_baudrate) of
+                              undefined -> 1000000;
+                              Other     -> Other
+                            end).
+
   
-open (DevicePath, BaudRate, Mask) ->
-  case 'CAN_drv':open(DevicePath) of
-    Descriptor when Descriptor > 0 ->
-      case 'CAN_drv':set_baudrate(Descriptor, BaudRate) of
-        0 -> case 'CAN_drv':set_filter(Descriptor, 0, 0, 0, Mask, 0) of
-               0     -> {ok, Descriptor};
-               Other -> {error, Other}
-             end;
-        Other2 -> {error, Other2}
-      end;
-    ErrorNumber when ErrorNumber < 0 -> {error, ErrorNumber}
-  end.
+open (DevicePath, BaudRate, Mask) when is_list(DevicePath), 
+                                       is_integer(BaudRate),
+                                       BaudRate > 0,
+                                       is_integer(Mask),
+                                       Mask  > -1 ->
+  open(DevicePath, self(), BaudRate, Mask).
+
+open (DevicePath, Receiver, BaudRate, Mask) when is_list(DevicePath),
+                                                 is_integer(BaudRate),
+                                                 BaudRate > 0,
+                                                 is_integer(Mask),
+                                                 Mask  > -1 ->
+  open_can(DevicePath, Receiver, BaudRate, Mask).
 
 -spec send (handle(), [{pos_integer(), binary()}]) ->
          {ok, {non_neg_integer(), non_neg_integer()}} | {error, term()}.
@@ -92,3 +103,22 @@ close (Handle) ->
 %%% Local Functions
 %%% ==========================================================================
 
+open_can (DevicePath, Pid, BaudRate, Mask) ->  
+  case 'CAN_drv':open(DevicePath, Pid) of
+    Descriptor when Descriptor > 0 ->
+      case 'CAN_drv':set_baudrate(Descriptor, BaudRate) of
+        0 -> case 'CAN_drv':set_filter(Descriptor, 0, 0, 0, Mask, 0) of
+               0 ->
+                 case 'CAN_drv':listener(Pid) of
+                   -1004 ->
+                     {error, thread_could_not_be_created};
+                   Other when is_pid(Other) ->
+                     {ok, Descriptor}
+                 end;
+               Other ->
+                 {error, Other}
+             end;
+        Other2 -> {error, Other2}
+      end;
+    ErrorNumber when ErrorNumber < 0 -> {error, ErrorNumber}
+  end.

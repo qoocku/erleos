@@ -14,6 +14,7 @@
          send/2,
          recv/2,
          close/1,
+         listener/4,
          translate_errno/1]).
 
 -define (LIB, "CAN_nif").
@@ -35,6 +36,7 @@ init () ->
 -spec send (handle(), [{non_neg_integer(), binary()}]) -> 
          neg_integer() | {non_neg_integer(), non_neg_integer()}.
 -spec recv (handle(), pos_integer()) -> [{non_neg_integer(), binary()}] | integer().
+-spec listener (handle(), pid(), pos_integer(), pos_integer()) -> pid() | integer().
 -spec close (handle()) -> 0 | {error, integer()}.
 
 open (DevicePath) when is_list(DevicePath) ->
@@ -69,6 +71,14 @@ close (Handle) ->
   case Handle of
     <<>> -> 0;
     _    -> {error, 0}
+  end.
+
+listener (Handle, Receiver, ChunkSize, Timeout) when is_pid(Receiver),
+                                                     ChunkSize > 0,
+                                                     Timeout > 0->
+  case Handle of
+    <<>> -> self();
+    _    -> -1004
   end.
 
 translate_errno (ErrNo) when is_integer(ErrNo) ->
