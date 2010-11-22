@@ -66,8 +66,7 @@ send (Handle, Ms) ->
                                TotalSize -> {ok, Valid};
                                Almost    -> {error, {partial_transfer, Almost}}
                              end;
-    Errornous =
-      {_, TotalSize}    -> {error, {partial_transfer, Errornous}};
+    Errornous = {_, _}  -> {error, {partial_transfer, Errornous}};
     -1000               -> {error, some_item_is_not_a_tuple};
     -1001               -> {error, tuple_item_should_have_two_elements};
     -1002               -> {errno, target_id_should_be_integer};

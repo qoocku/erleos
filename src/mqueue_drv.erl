@@ -19,8 +19,7 @@
 %%% E x p o r t e d  A P I  F u n c t i o n s
 %%% ==========================================================================
 
--export ([hello/0,
-          open/4,
+-export ([open/4,
           close/1,
           recv/1,
           send/3,
@@ -36,23 +35,38 @@
 %%% A P I  F u n c ti o n s
 %%% ==========================================================================
 
-hello () ->
-  nif_library_not_loaded.
+-type handle() :: any().
+-type options() :: [pid()|own].
 
-open (Name, QueueSize, MaxMsgSize, Options) ->
+-spec open (string(), pos_integer(), pos_integer(), options()) -> {ok, handle()}.
+-spec close (handle()) -> ok.
+-spec recv (handle()) -> {ok, binary()} | {error, term()}.
+-spec send (handle(), binary(), non_neg_integer()) -> ok | {error, term()}.
+-spec props(handle()) -> {ok, [noblock|own]}.
+
+open (Name, QueueSize, MaxMsgSize, Options) when is_list(Name),
+                                                 QueueSize > 0,
+                                                 MaxMsgSize > 0,
+                                                 is_list(Options) ->
   {ok, <<>>}.
 
-close (Handle) ->
-  0.
-
-recv (Handle) ->
-  {ok, <<>>}.
-
-send (Handle, Binary, Priority) when is_binary(Binary), is_integer(Priority) ->
+close (Handle) when Handle =/= undefined ->
   ok.
 
-props (Handle) ->
-  [].
+recv (Handle) when Handle =/= undefined ->
+  case Handle of
+    <<>> -> {ok, <<>>};
+    Error = {error, _} -> Error
+  end.
+
+send (Handle, Binary, Priority) when Handle =/= undefined,
+                                     is_binary(Binary),
+                                     is_integer(Priority),
+                                     Priority > -1 ->
+  ok.
+
+props (Handle) when Handle =/= undefined ->
+  {ok, [own]}.
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

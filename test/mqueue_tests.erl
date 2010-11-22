@@ -9,16 +9,6 @@
 
 -include_lib ("eunit/include/eunit.hrl").
 
--record (ctx, {}).
-
-setup () ->
-  ok = application:start(erleos),
-  #ctx{}.
-  
-tear_down (#ctx{} = Ctx) ->
-  application:stop(erleos),
-  ok.
-
 lib_load_test () ->
   ?assertEqual("Hello world!", mqueue_drv:hello()).
 

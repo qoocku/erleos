@@ -22,12 +22,6 @@ static ERL_NIF_TERM ok_atom;
 static ERL_NIF_TERM eagain_atom;
 static ERL_NIF_TERM mqueue_atom;
 
-static ERL_NIF_TERM
-hello(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
-{
-  return enif_make_string(env, "Hello world!", ERL_NIF_LATIN1);
-}
-
 ErlNifResourceType* mqd_type = 0;
 struct mq_handle {
   mqd_t  queue;
@@ -307,7 +301,6 @@ _props (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc nif_funcs[] =
   {
-    { "hello", 0, hello },
     { "open",  4, _open },
     { "close", 1, _close },
     { "recv",  1, _receive },

@@ -32,6 +32,8 @@
                       mqueue:mqueue_options() | 
                       [{timeout, pos_integer()}]].
 
+-spec init (init_args()) -> {ok, state()}.
+
 init (Args) when is_list(Args) ->
   [QueueName, Receiver, Options]   = Args,
   {MQOptions, MyOptions}           = lists:foldl(fun
@@ -87,7 +89,7 @@ handle_info ({timeout, _, tick}, State = #state{queue =    Q,
     {stop, Reason} -> {stop, Reason, State}
   end.
 
-terminate (Reason, State = #state{queue =Q}) ->
+terminate (_Reason, #state{queue =Q}) ->
   mqueue_drv:close(Q).
 
 code_change (_OldVsn, State, _Extra) ->
