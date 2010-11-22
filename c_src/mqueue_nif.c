@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #define MODULE "mqueue_drv"
 
@@ -207,7 +208,7 @@ reading_thread (void* arg)
         }
       if (handle->threaded)
         {
-          enif_send(0, &handle->receiver, env, tuple);
+          enif_send(env, &handle->receiver, env, tuple);
           //enif_fprintf(stdout, "sent %i bytes\n", size);
         }
       enif_clear_env(env);

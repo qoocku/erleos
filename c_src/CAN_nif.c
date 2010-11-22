@@ -84,7 +84,7 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     }
   else
     {
-      result = enif_make_int(env, handle->handle);
+      result = enif_make_int(env, errno);
     }
   enif_release_resource(handle);
   return result;
@@ -105,7 +105,7 @@ _reading_thread (void* arg)
   while (handle->threaded)
     {
       ERL_NIF_TERM msg = _receive_can_messages(env, handle, handle->chunk_size, handle->timeout);
-      enif_send(0, &handle->receiver, env, enif_make_tuple3(env, can_atom, device, msg));
+      enif_send(env, &handle->receiver, env, enif_make_tuple3(env, can_atom, device, msg));
       enif_clear_env(env);
     }
   enif_free_env(env);
@@ -186,9 +186,8 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   unsigned int i, length, total_size = 0;
   ERL_NIF_TERM result;
   enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
-  messages = argv[2];
+  messages = argv[1];
   enif_get_list_length(env, messages, &length);
-  enif_get_uint(env, argv[3], &total_size);
   canmsg_t* buffer = enif_alloc(length * sizeof(canmsg_t));
   for (i = 0; i < length; i++)
     {
@@ -211,6 +210,24 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         }
       if (!enif_get_uint(env, items[0], &target))
         {
+	  if (enif_is_atom(env, items[0]))
+	    enif_fprintf(stdout, "atom\n");
+          else if (enif_is_binary(env, items[0]))
+	    enif_fprintf(stdout, "bin\n");
+          else if (enif_is_empty_list(env, items[0]))
+	    enif_fprintf(stdout, "empty list\n");
+          else if (enif_is_fun(env, items[0]))
+	    enif_fprintf(stdout, "fun\n");
+          else if (enif_is_pid(env, items[0]))
+	    enif_fprintf(stdout, "pid\n");
+          else if (enif_is_port(env, items[0]))
+	    enif_fprintf(stdout, "port\n");
+          else if (enif_is_ref(env, items[0]))
+	    enif_fprintf(stdout, "ref\n");
+          else if (enif_is_tuple(env, items[0]))
+	    enif_fprintf(stdout, "tuple\n");
+          else if (enif_is_list(env, items[0]))
+	    enif_fprintf(stdout, "list\n");
           result = enif_make_int(env, -1002);
           goto end;
         }
@@ -343,13 +360,13 @@ _translate_errno (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 static ErlNifFunc nif_funcs[] =
   {
-    { "open", 2, _open },
+    { "open", 1, _open },
     { "set_baudrate", 2, _set_baudrate },
     { "set_filter", 6, _set_filter },
     { "send", 2, _send },
     { "recv", 2, _recv },
     { "close", 1, _close },
-    { "listener", 3, _listener },
+    { "listener", 4, _listener },
     { "translate_errno", 1, _translate_errno }
   };
 
