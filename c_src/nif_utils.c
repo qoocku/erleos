@@ -50,7 +50,7 @@ errno_atom (ErlNifEnv* env, int err)
   case EAGAIN:
     str = "eagain"; break;
   default:
-    str = (const char*)strerror(err);
+    return enif_make_string(env, (const char*)strerror(err), ERL_NIF_LATIN1);
   }
   return make_atom(env, str);
 }

@@ -41,9 +41,9 @@ open (DevicePath, BaudRate) ->
                               end).
   
 open (DevicePath, BaudRate, Mask) ->
-  case 'CAN_drv':open(DevicePath, BaudRate, Mask) of
+  case 'CAN_drv':open(DevicePath) of
     Descriptor when Descriptor > 0 ->
-      case 'CAN_drv':set_baudrate(Descriptor) of
+      case 'CAN_drv':set_baudrate(Descriptor, BaudRate) of
         0 -> case 'CAN_drv':set_filter(Descriptor, 0, 0, 0, Mask, 0) of
                0     -> {ok, Descriptor};
                Other -> {error, Other}

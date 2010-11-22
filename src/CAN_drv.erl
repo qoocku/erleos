@@ -13,7 +13,8 @@
          set_filter/6,
          send/2,
          recv/2,
-         close/1]).
+         close/1,
+         translate_errno/1]).
 
 -define (LIB, "CAN_nif").
 
@@ -70,5 +71,8 @@ close (Handle) ->
     _    -> {error, 0}
   end.
 
-
+translate_errno (ErrNo) when is_integer(ErrNo) ->
+  'error';
+translate_errno (_) ->
+  badarg.
 
