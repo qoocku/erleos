@@ -49,7 +49,7 @@
 -opaque mq ()          :: #mq{}.
 -type mqueue_options() :: [{size, pos_integer()}   |
                            {msgsize, pos_integer()}|
-                           noblock | own].
+                           {active, pid()} | own].
     
 -spec parse_options (mqueue_options()) -> {pos_integer(), pos_integer(), []|[noblock|own]}.
 
@@ -63,7 +63,7 @@ parse_options (Options) ->
                  _               -> 256
                end,
   Rest       = lists:filter(fun
-                             (ValidOpt) when ValidOpt =:= noblock ;
+                             (ValidOpt) when is_tuple(ValidOpt) ;
                                               ValidOpt =:= own ->
                                 true;
                              (Opt) ->
@@ -79,7 +79,11 @@ open (QueueName) when is_list(QueueName) ->
 
 open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
   {QueueSize, MaxMsgSize, Rest} = parse_options(Options),
-  case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, Rest) of
+  Rest2 = [case Opt of
+             {active, Pid} -> Pid;
+             Other         -> Other
+           end || Opt <- Rest],
+  case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, Rest2) of
       {ok, Q} -> {ok, #mq{hnd = Q}};
       Other   -> Other
   end.
