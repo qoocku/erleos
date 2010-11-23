@@ -317,7 +317,7 @@ _receive_can_messages (ErlNifEnv* env,
   ERL_NIF_TERM *list, result;
   canmsg_t buffer[sizeof(ERL_NIF_TERM) * BUFFER_LIMIT];
   do {
-    if (timeout > 0)
+    //if (timeout > 0)
       {
         int status = _wait_for_input(handle, timeout);
         if (status == -1) continue;
