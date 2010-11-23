@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
+#include <unistd.h>
 #include "can.h"
 #include "canmsg.h"
 #include "erl_nif.h"
@@ -99,6 +100,7 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   enif_get_string(env, argv[0], dev_path, 512, ERL_NIF_LATIN1);
   handle = enif_alloc_resource(CAN_handle_type, sizeof(CAN_handle));
   handle->handle = open((const char*)dev_path,  O_RDWR | O_SYNC);
+  handle->threaded = 0;
   if (handle->handle >= 0)
     {
       result = enif_make_resource(env, handle);
@@ -123,11 +125,21 @@ _reading_thread (void* arg)
   CAN_handle* handle  = arg;
   ErlNifEnv*  env     = enif_alloc_env();
   ERL_NIF_TERM device =   enif_make_int(env, handle->handle);
+  handle->threaded = 1;
   while (handle->threaded)
     {
+      int status;
       ERL_NIF_TERM msg = _receive_can_messages(env, handle, handle->chunk_size, handle->timeout);
-      enif_send(env, &handle->receiver, env, enif_make_tuple3(env, can_atom, device, msg));
-      enif_clear_env(env);
+      if (!enif_get_int(env, msg, &status))
+        {
+          enif_send(env, &handle->receiver, env, enif_make_tuple3(env, can_atom, device, msg));
+          enif_clear_env(env);
+        }
+      else if (status == 0)
+        {
+          enif_clear_env(env);
+        }
+      else break;
     }
   enif_free_env(env);
   return 0;
@@ -142,18 +154,27 @@ _listener (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (handle->threaded) // there is a thread already and some pid!
     pid = handle->receiver;
   if (!enif_get_local_pid(env, argv[1], &handle->receiver)) // NOTE: use lock if pid type is structural!
-    handle->threaded = 0;
-  enif_get_uint(env, argv[2], &handle->chunk_size);
-  enif_get_ulong(env, argv[3], &handle->timeout);
-  if (!handle->threaded) // a thread was not created already
     {
-      if (!enif_thread_create("can_reading_thread",
-                              &handle->tid,
-                              _reading_thread,
-                              handle, 0))
-        return enif_make_int(env, -1004);
+      handle->threaded = 0;
+      return enif_make_badarg(env);
     }
-  return enif_make_pid(env, &pid);
+  else
+    {
+      enif_get_uint(env, argv[2], &handle->chunk_size);
+      enif_get_ulong(env, argv[3], &handle->timeout);
+      if (!handle->threaded) // a thread was not created already
+        {
+          if (enif_thread_create("can_reading_thread",
+              &handle->tid,
+              _reading_thread,
+              handle, 0))
+            {
+              handle->threaded = 0;
+              return enif_make_int(env, -1004);
+            }
+        }
+    }
+  return pid.pid ? enif_make_pid(env, &pid) : enif_make_int(env, 0);
 }
 
 static ERL_NIF_TERM
@@ -231,14 +252,11 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
           result = enif_make_int(env, -1001);
           goto end;
         }
-      debug_enif_type(env, items[0]);
-      debug_enif_type(env, items[1]);
       if (!enif_get_ulong(env, items[0], &target))
         {
           result = enif_make_int(env, -1002);
           goto end;
         }
-      can_msg->id = target;
       if (!enif_inspect_binary(env, items[1], &msg))
         {
           result = enif_make_int(env, -1003);
@@ -249,13 +267,14 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
           result = enif_make_int(env, -1005);
           goto end;
         }
+      can_msg->id = target;
       memcpy(&can_msg->data[0], msg.data, msg.size);
       can_msg->length = msg.size;
       total_size += msg.size;
     }
   {
-    int status = write(handle->handle, buffer, length);
-    if (status != length) status = errno;
+    int status = write(handle->handle, buffer, length * sizeof(canmsg_t));
+    if (status != length * sizeof(canmsg_t)) status = errno;
     result = enif_make_tuple2(env,
         enif_make_int(env, status),
         enif_make_int(env, total_size));
@@ -283,16 +302,20 @@ _wait_for_input (CAN_handle* handle, unsigned long timeout)
   }
 }
 
+#define BUFFER_LIMIT 500
+
 static ERL_NIF_TERM
 _receive_can_messages (ErlNifEnv* env,
                         CAN_handle* handle,
                         unsigned int chunk_size,
                         unsigned long timeout)
 {
-  int length, offset = 0, chunks = 1, i = 0;
-  ERL_NIF_TERM* list;
-  ERL_NIF_TERM result;
-  canmsg_t* buffer = enif_alloc(sizeof(ERL_NIF_TERM) * chunk_size);
+  int length = 0,
+      i = 0,
+      chunks = 0,
+      bytes_in_chunk = sizeof(canmsg_t) * chunk_size;
+  ERL_NIF_TERM *list, result;
+  canmsg_t buffer[sizeof(ERL_NIF_TERM) * BUFFER_LIMIT];
   do {
     if (timeout > 0)
       {
@@ -304,32 +327,38 @@ _receive_can_messages (ErlNifEnv* env,
             goto end;
           }
       }
-    length = read(handle->handle, buffer, sizeof(canmsg_t));
-    if (length < 0) break;
-    offset += length;
-    i += length;
-    if (i > chunk_size)
-      {
-        chunks += 1;
-        enif_realloc(buffer, chunks * chunk_size);
-        i = 0;
-      }
-
-  } while (length <= 0);
-  list = enif_alloc(sizeof(ERL_NIF_TERM) * chunk_size);
-  // rewrite canmsgs to list of tuples
-  for (i = 0; i < offset; i++)
+    length = read(handle->handle, &buffer[chunks], sizeof(canmsg_t) * chunk_size);
+    if (length < 0 || length < bytes_in_chunk)
+      break;
+    chunks += chunk_size;
+  } while (length > 0 && chunks <= BUFFER_LIMIT);
+  if (chunks > 0)
+#if 1
     {
-      canmsg_t* can_msg = &buffer[i];
-      ERL_NIF_TERM bin;
-      void* data = enif_make_new_binary(env, can_msg->length, &bin);
-      memcpy(data, can_msg->data, can_msg->length);
-      list[i] = enif_make_tuple2(env, enif_make_int(env, can_msg->id), bin);
+      list = enif_alloc(sizeof(ERL_NIF_TERM) * chunks);
+      // rewrite canmsgs to list of tuples
+      for (i = 0; i < chunks; i++)
+        {
+          canmsg_t* can_msg = buffer + i;
+          ERL_NIF_TERM bin;
+          void* data = enif_make_new_binary(env, can_msg->length, &bin);
+          memcpy(data, can_msg->data, can_msg->length);
+          list[i] = enif_make_tuple2(env, enif_make_int(env, can_msg->id), bin);
+        }
+      result = enif_make_list_from_array(env, list, chunks);
+      enif_free(list);
     }
-  result = enif_make_list_from_array(env, list, length);
-  enif_free(list);
+#else
+  {
+    void* data = enif_make_new_binary(env, chunks * sizeof(canmsg_t), &result);
+    memcpy(data, buffer, chunks * sizeof(canmsg_t));
+  }
+#endif
+  else if (length == 0)
+    result = enif_make_int(env, 0);
+  else
+    result = enif_make_int(env, errno);
 end:
-  enif_free(buffer);
   return result;
 }
 
@@ -338,10 +367,12 @@ _recv  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   CAN_handle* handle;
   unsigned int chunk_size;
+  ErlNifUInt64 timeout;
   ERL_NIF_TERM result;
   enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
   enif_get_uint(env, argv[1], &chunk_size);
-  result = _receive_can_messages(env, handle, chunk_size, 0L);
+  enif_get_uint64(env,argv[2], &timeout);
+  result = _receive_can_messages(env, handle, chunk_size, timeout);
   return result;
 }
 
@@ -376,7 +407,7 @@ static ErlNifFunc nif_funcs[] =
     { "set_baudrate", 2, _set_baudrate },
     { "set_filter", 6, _set_filter },
     { "send", 2, _send },
-    { "recv", 2, _recv },
+    { "recv", 3, _recv },
     { "close", 1, _close },
     { "listener", 4, _listener },
     { "translate_errno", 1, _translate_errno },

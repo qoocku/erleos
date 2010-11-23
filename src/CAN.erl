@@ -15,6 +15,7 @@
          send/2,
          recv/1,
          recv/2,
+         recv/3,
          close/1]).
 
 %%% ==========================================================================
@@ -31,9 +32,9 @@ open () ->
 
 open (DevicePath) when is_list(DevicePath) ->
   open (DevicePath, self(), case application:get_env(can_baudrate) of
-                              undefined -> 1000000;
-                              Other     -> Other
-                            end).
+                      undefined -> 1000000;
+                      Other     -> Other
+                    end).
 
 open (DevicePath, BaudRate) when is_list(DevicePath),
                                  is_integer(BaudRate),
@@ -82,6 +83,7 @@ send (Handle, Ms) ->
     -1001               -> {error, tuple_item_should_have_two_elements};
     -1002               -> {errno, target_id_should_be_integer};
     -1003               -> {errno, message_should_be_binary};
+    -1004               -> {errno, cannot_create_thread};
     -1005               -> {errno, message_too_long}
   end.
 
@@ -92,7 +94,10 @@ recv (Handle) ->
                end).
 
 recv (Handle, ChunkSize) ->
-  'CAN_drv':recv(Handle, ChunkSize).
+  'CAN_drv':recv(Handle, ChunkSize, 0).
+
+recv (Handle, ChunkSize, Timeout) ->
+  'CAN_drv':recv(Handle, ChunkSize, Timeout).
 
 close (Handle) ->
   case 'CAN_drv':close(Handle) of
@@ -110,7 +115,7 @@ open_can (DevicePath, Pid, BaudRate, Mask) ->
       case 'CAN_drv':set_baudrate(Descriptor, BaudRate) of
         0 -> case 'CAN_drv':set_filter(Descriptor, 0, 0, 0, Mask, 0) of
                0 ->
-                 case 'CAN_drv':listener(Pid) of
+                 case 'CAN_drv':listener(Pid, 64, 5000000) of
                    -1004 ->
                      {error, thread_could_not_be_created};
                    Other when is_pid(Other) ->

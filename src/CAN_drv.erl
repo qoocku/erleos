@@ -12,7 +12,7 @@
          set_baudrate/2,
          set_filter/6,
          send/2,
-         recv/2,
+         recv/3,
          close/1,
          listener/4,
          translate_errno/1,
@@ -36,7 +36,7 @@ init () ->
                    non_neg_integer())  -> integer().
 -spec send (handle(), [{non_neg_integer(), binary()}]) -> 
          neg_integer() | {non_neg_integer(), non_neg_integer()}.
--spec recv (handle(), pos_integer()) -> [{non_neg_integer(), binary()}] | integer().
+-spec recv (handle(), pos_integer(), non_neg_integer()) -> [{non_neg_integer(), binary()}] | integer().
 -spec listener (handle(), pid(), pos_integer(), pos_integer()) -> pid() | integer().
 -spec close (handle()) -> 0 | {error, integer()}.
 
@@ -62,7 +62,8 @@ send (Handle, Ms) when Handle =/= undefined, is_list(Ms) ->
     _    -> -1000
   end.
 
-recv (Handle, ChunkSize) when ChunkSize > 0 -> 
+recv (Handle, ChunkSize, Timeout) when ChunkSize > 0,
+                                       Timeout >= 0-> 
   case Handle of
     <<>> -> [{0, <<>>}];
     _    -> 0
