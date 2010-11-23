@@ -81,7 +81,8 @@ send (Handle, Ms) ->
     -1000               -> {error, some_item_is_not_a_tuple};
     -1001               -> {error, tuple_item_should_have_two_elements};
     -1002               -> {errno, target_id_should_be_integer};
-    -1003               -> {errno, message_should_be_binary}
+    -1003               -> {errno, message_should_be_binary};
+    -1005               -> {errno, message_too_long}
   end.
 
 recv (Handle) ->

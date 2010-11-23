@@ -74,11 +74,18 @@ _check_tuple (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   const ERL_NIF_TERM* items;
   int arity, i;
-  enif_get_tuple(env, argv[0], &arity, &items);
-  enif_fprintf(stdout, "arity: %i\n", arity);
-  for (i = 0; i < arity; i++)
+  enif_get_int(env, argv[0], &i);
+  ERL_NIF_TERM head, tail, list;
+  list = argv[1];
+  while (enif_get_list_cell(env, list, &head, &tail))
     {
-      debug_enif_type(env, items[i]);
+      list = tail;
+      enif_get_tuple(env, head, &arity, &items);
+      enif_fprintf(stdout, "arity: %i\n", arity);
+      for (i = 0; i < arity; i++)
+        {
+          debug_enif_type(env, items[i]);
+        }
     }
   return enif_make_int(env, arity);
 }
@@ -197,25 +204,23 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   CAN_handle* handle;
   ERL_NIF_TERM messages;
-  unsigned int i, length, total_size = 0;
+  unsigned int i = 0, length, total_size = 0;
   ERL_NIF_TERM result;
-  //enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
+  enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
   messages = argv[1];
   enif_get_list_length(env, messages, &length);
   canmsg_t* buffer = enif_alloc(length * sizeof(canmsg_t));
+  bzero(buffer, length * sizeof(canmsg_t));
   ERL_NIF_TERM list = messages;
-  for (i = 0; i < length; i++)
+  ERL_NIF_TERM head, tail;
+  while (enif_get_list_cell(env, list, &head, &tail))
     {
-      canmsg_t* can_msg = &buffer[i];
+      canmsg_t* can_msg = &buffer[i++];
       int arity;
-      unsigned int target;
+      canmsg_id_t target;
       ErlNifBinary msg;
-      ERL_NIF_TERM head, tail;
       const ERL_NIF_TERM* items;
-      enif_get_list_cell(env, list, &head, &tail);
       list = tail;
-      debug_enif_type(env, head);
-      debug_enif_type(env, tail);
       if (!enif_get_tuple(env, head, &arity, &items))
         {
           result = enif_make_int(env, -1000);
@@ -228,7 +233,7 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         }
       debug_enif_type(env, items[0]);
       debug_enif_type(env, items[1]);
-      if (!enif_get_uint(env, items[0], &target))
+      if (!enif_get_ulong(env, items[0], &target))
         {
           result = enif_make_int(env, -1002);
           goto end;
@@ -239,7 +244,12 @@ _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
           result = enif_make_int(env, -1003);
           goto end;
         }
-      memcpy(can_msg->data, msg.data, msg.size);
+      if (msg.size > CAN_MSG_LENGTH)
+        {
+          result = enif_make_int(env, -1005);
+          goto end;
+        }
+      memcpy(&can_msg->data[0], msg.data, msg.size);
       can_msg->length = msg.size;
       total_size += msg.size;
     }
@@ -370,7 +380,7 @@ static ErlNifFunc nif_funcs[] =
     { "close", 1, _close },
     { "listener", 4, _listener },
     { "translate_errno", 1, _translate_errno },
-    { "check_tuple", 1, _check_tuple }
+    { "check_tuple", 2, _check_tuple }
   };
 
 ERL_NIF_INIT(CAN_drv, nif_funcs, load_module, reload_module, upgrade_module, unload_module);

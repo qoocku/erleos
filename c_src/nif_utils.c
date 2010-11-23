@@ -76,4 +76,6 @@ debug_enif_type (ErlNifEnv* env, ERL_NIF_TERM e)
       enif_fprintf(stdout, "tuple\n");
     else if (enif_is_list(env, e))
       enif_fprintf(stdout, "list\n");
+    else
+      enif_fprintf(stdout, "unknown\n");
 }

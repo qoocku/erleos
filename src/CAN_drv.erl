@@ -16,7 +16,7 @@
          close/1,
          listener/4,
          translate_errno/1,
-         check_tuple/1]).
+         check_tuple/2]).
 
 -define (LIB, "CAN_nif").
 
@@ -87,4 +87,4 @@ translate_errno (ErrNo) when is_integer(ErrNo) ->
 translate_errno (_) ->
   badarg.
 
-check_tuple (T) -> 0.
+check_tuple (I, T) -> 0.
