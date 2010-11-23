@@ -36,7 +36,7 @@ struct mq_handle {
 };
 
 static int
-load_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
+_load_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
   ErlNifResourceFlags flags;
   mqd_type = enif_open_resource_type(env, MODULE, "mqd_t", NULL,
@@ -49,20 +49,20 @@ load_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 }
 
 static int
-reload_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
+_reload_module(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
   printf("***mqueue_nif reload called\n");
   return 0;
 }
 
 static void
-unload_module(ErlNifEnv* env, void* priv_data)
+_unload_module(ErlNifEnv* env, void* priv_data)
 {
   printf("***mqueue_nif unload called\n");
 }
 
 static int
-upgrade_module (ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info)
+_upgrade_module (ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info)
 {
   ErlNifResourceFlags flags;
   mqd_type = enif_open_resource_type(env, NULL, "mqd_t", NULL,
@@ -309,4 +309,4 @@ static ErlNifFunc nif_funcs[] =
     { "props", 1, _props }
   };
 
-ERL_NIF_INIT(mqueue_drv, nif_funcs, load_module, reload_module, upgrade_module, unload_module);
+ERL_NIF_INIT(mqueue_drv, nif_funcs, _load_module, _reload_module, _upgrade_module, _unload_module);

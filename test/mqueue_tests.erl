@@ -9,9 +9,6 @@
 
 -include_lib ("eunit/include/eunit.hrl").
 
-lib_load_test () ->
-  ?assertEqual("Hello world!", mqueue_drv:hello()).
-
 valid_parse_option_test () ->
   {QS, MMS, Rest} = mqueue:parse_options([]),
   check_parsing_result(QS, MMS, Rest),

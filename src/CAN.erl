@@ -10,8 +10,6 @@
 -export([open/0,
          open/1,
          open/2,
-         open/3,
-         open/4,
          send/2,
          recv/1,
          recv/2,
@@ -28,42 +26,49 @@ open () ->
   open (case application:get_env(can_device_path) of
           undefined -> "/dev/can0";
           Other -> Other
-        end, self()).
+        end).
 
 open (DevicePath) when is_list(DevicePath) ->
-  open (DevicePath, self(), case application:get_env(can_baudrate) of
-                      undefined -> 1000000;
-                      Other     -> Other
-                    end).
+  open (DevicePath, []).
 
-open (DevicePath, BaudRate) when is_list(DevicePath),
-                                 is_integer(BaudRate),
-                                 BaudRate > 0 ->
-  open (DevicePath, self(), BaudRate,
-        case application:get_env(can_mask) of
-          undefined -> 0;
-          Other     -> Other
-        end);
-open (DevicePath, Receiver) when is_list(DevicePath) ->
-  open (DevicePath, Receiver, case application:get_env(can_baudrate) of
-                              undefined -> 1000000;
-                              Other     -> Other
-                            end).
-
-  
-open (DevicePath, BaudRate, Mask) when is_list(DevicePath), 
-                                       is_integer(BaudRate),
-                                       BaudRate > 0,
-                                       is_integer(Mask),
-                                       Mask  > -1 ->
-  open(DevicePath, self(), BaudRate, Mask).
-
-open (DevicePath, Receiver, BaudRate, Mask) when is_list(DevicePath),
-                                                 is_integer(BaudRate),
-                                                 BaudRate > 0,
-                                                 is_integer(Mask),
-                                                 Mask  > -1 ->
-  open_can(DevicePath, Receiver, BaudRate, Mask).
+open (DevicePath, Options) when is_list(DevicePath),
+                                 is_list(Options) ->
+  DefBRate = case application:get_env(can_baudrate) of
+               undefined   -> 1000000;
+               Other1 when
+                 is_integer(Other1),
+                 Other1 > 0 -> Other1
+             end, 
+  DefMask  = case application:get_env(can_mask) of
+               undefined    -> [0, 0, 0, 0, 0];
+               Other2 when
+                 is_list(Other2),
+                 length(Other2) == 5 -> Other2
+             end,
+  DefRaw   = case application:get_env(can_raw_mode) of
+               undefined -> 0;
+               true      -> 1;
+               false     -> 0
+             end,
+  DefChunk = case application:get_env(can_read_chunk_size) of
+               undefined    -> 128;
+               Other3 when
+                 is_integer(Other3),
+                 Other3 > 0 -> Other3
+             end,
+  DefTout  = case application:get_env(can_read_chunk_size) of
+               undefined    -> 2500000; % 2.5 ms = 2.5*10^6 ns
+               Other4 when
+                 is_integer(Other4),
+                 Other4 >= 0 -> Other4
+             end,
+  BaudRate = proplists:get_value(baudrate, Options, DefBRate),
+  Mask     = proplists:get_value(mask, Options, DefMask),
+  Raw      = proplists:get_value(raw, Options, DefRaw),
+  Receiver = proplists:get_value(active, Options, undefined),
+  Chunks   = proplists:get_value(chunk_size, Options, DefChunk),
+  Timeout  = proplists:get_value(timeout, Options, DefTout),
+  open_can(DevicePath, Receiver, BaudRate, Mask, Raw, Chunks, Timeout).
 
 -spec send (handle(), [{pos_integer(), binary()}]) ->
          {ok, {non_neg_integer(), non_neg_integer()}} | {error, term()}.
@@ -109,22 +114,27 @@ close (Handle) ->
 %%% Local Functions
 %%% ==========================================================================
 
-open_can (DevicePath, Pid, BaudRate, Mask) ->  
-  case 'CAN_drv':open(DevicePath, Pid) of
-    Descriptor when Descriptor > 0 ->
-      case 'CAN_drv':set_baudrate(Descriptor, BaudRate) of
-        0 -> case 'CAN_drv':set_filter(Descriptor, 0, 0, 0, Mask, 0) of
+open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->  
+  case 'CAN_drv':open(DevicePath, Raw) of
+    C when C >= 0 ->
+      case 'CAN_drv':set_baudrate(C, BaudRate) of
+        0 -> case apply('CAN_drv', set_filter, [C] ++ Mask) of
                0 ->
-                 case 'CAN_drv':listener(Pid, 64, 5000000) of
-                   -1004 ->
-                     {error, thread_could_not_be_created};
-                   Other when is_pid(Other) ->
-                     {ok, Descriptor}
-                 end;
+                 set_receiver(C, Pid, ChunkSize, Timeout);
                Other ->
                  {error, Other}
              end;
         Other2 -> {error, Other2}
       end;
     ErrorNumber when ErrorNumber < 0 -> {error, ErrorNumber}
+  end.
+
+set_receiver (_, undefined, _, _) ->
+  ok;
+set_receiver (Handle, Pid, ChunkSize, Timeout) ->
+  case 'CAN_drv':listener(Handle, Pid, ChunkSize, Timeout) of
+    -1004 ->
+      {error, thread_could_not_be_created};
+    Other when is_pid(Other) ->
+      {ok, Handle}
   end.
