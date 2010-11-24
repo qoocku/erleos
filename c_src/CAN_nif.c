@@ -101,12 +101,12 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   ERL_NIF_TERM result;
   char        dev_path[512];
   if (!enif_get_string(env, argv[0], dev_path, 512, ERL_NIF_LATIN1))
-    return enif_make_badarg(env);
+    return enif_make_int(env, -2000);
   handle = enif_alloc_resource(CAN_handle_type, sizeof(CAN_handle));
   memset(handle, 0, sizeof(CAN_handle));
   handle->device = open((const char*)dev_path,  O_RDWR | O_SYNC);
   if (!enif_get_int(env, argv[1], &handle->raw))
-    return enif_make_badarg(env);
+    return enif_make_int(env, -2001);
   handle->threaded = 0;
   if (handle->device >= 0)
     {
@@ -234,15 +234,15 @@ static ERL_NIF_TERM
 _send  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   CAN_handle* handle;
-  ERL_NIF_TERM messages;
   unsigned int i = 0, length, total_size = 0;
   ERL_NIF_TERM result;
-  if (!enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle) ||
-      !enif_get_list_length(env, argv[1], &length))
-    return enif_make_badarg(env);
+  if (!enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle))
+    return enif_make_int(env, -2000);
+  if (!enif_get_list_length(env, argv[1], &length))
+    return enif_make_int(env, -2001);
   canmsg_t* buffer = enif_alloc(length * sizeof(canmsg_t));
   memset(buffer, 0, length * sizeof(canmsg_t));
-  ERL_NIF_TERM list = messages;
+  ERL_NIF_TERM list = argv[1];
   ERL_NIF_TERM head, tail;
   while (enif_get_list_cell(env, list, &head, &tail))
     {
