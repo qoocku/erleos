@@ -14,6 +14,7 @@
          recv/1,
          recv/2,
          recv/3,
+	 set_receiver/4,
          close/1]).
 
 %%% ==========================================================================
@@ -124,9 +125,13 @@ close (Handle) ->
 open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->  
   case 'CAN_drv':open(DevicePath, case Raw of
                                     true  -> 1;
-                                    false -> 0
+                                    false -> 0;
+                                    undefined -> 0
                                   end) of
-    C when C >= 0 ->
+
+    ErrorNumber when ErrorNumber < 0 -> 
+      {error, ErrorNumber};
+    C ->
       case set_baudrate(C, BaudRate) of
         0 -> case set_mask(C, Mask) of
                0 ->
@@ -135,8 +140,7 @@ open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->
                  {error, Other}
              end;
         Other2 -> {error, Other2}
-      end;
-    ErrorNumber when ErrorNumber < 0 -> {error, ErrorNumber}
+      end
   end.
 
 %% @doc Sets baud rate if the value is defined
@@ -159,6 +163,8 @@ set_receiver (Handle, undefined, _, _) ->
   {ok, Handle};
 set_receiver (Handle, Pid, ChunkSize, Timeout) ->
   case 'CAN_drv':listener(Handle, Pid, ChunkSize, Timeout) of
+    0     ->
+      {ok, Handle};
     -1004 ->
       {error, thread_could_not_be_created};
     Other when is_pid(Other) ->

@@ -12,6 +12,7 @@ defaults: .def.erlroot .def.erts.vsn
 erts_vsn = ${shell cat .def.erts.vsn}
 erl_root  = ${shell cat .def.erlroot}
 dlls = ${foreach i,${notdir ${filter-out c_src/nif_utils.c,${wildcard c_src/*.c}}},priv/${i:.c=.so}}
+beams = ${wildcard src/*.erl tests/*.erl}
 CFLAGS = -Wall -I ${erl_root}/erts-${erts_vsn}/include -fpic -O3 -I ${LINCAN_ROOT}/include
 
 lincan:
@@ -25,9 +26,9 @@ clean:
 	rm -f c_src/*.o
 	rm -f priv/*.so
 
-beams:
-	@erl -make
-
+beams: 
+	@erl -make	
+	
 dlls: ${dlls}
 
 priv/%.so: c_src/%.o
