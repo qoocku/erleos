@@ -105,7 +105,7 @@ send (Handle, Ms) ->
   end.
 
 -type recv_result () :: {ok, 'CAN_drv':recv_result()} |
-                         {error, term()}
+                         {error, term()}.
 -spec recv (handle()) -> recv_result().
 -spec recv (handle(), pos_integer()) -> recv_result().
 -spec recv (handle(), pos_integer(), non_neg_integer()) -> recv_result().
