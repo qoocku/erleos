@@ -1,7 +1,7 @@
 %%% ==========================================================================
 %%% @author Damian T. Dobroczy\\'nski <qoocku@gmail.com>
 %%% @since 2010-11-20
-%%% @doc Server for mqueue reading & writing
+%%% @doc Server for mqueue reading and writing
 %%% @end
 %%% ==========================================================================
 -module (mqueue_srv).

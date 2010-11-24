@@ -9,8 +9,11 @@
                  ]},
   {modules, [erleos_app,
              erleos_sup,
+             erleos_sensor,
              mqueue,
-             mqueue_drv]},                 
+             mqueue_drv,
+             'CAN',
+             'CAN_drv']},                 
   {mod, { erleos_app, []}},
   {env, []}
  ]}.

@@ -27,7 +27,7 @@ no_lincan:
 	$(error LINCAN_ROOT parameter or environment variable should be set)
 
 doc: ${wildcard src/*.erl}
-	erl -pa ebin -noshell -eval 'edoc:application(erleos)' -s init stop
+	erl -pa ebin -noshell -eval 'edoc:application(erleos, ".", [])' -s init stop
 
 purge: clean
 	rm -f .def.*

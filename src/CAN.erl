@@ -44,32 +44,38 @@ open (DevicePath) when is_list(DevicePath) ->
 open (DevicePath, Options) when is_list(DevicePath),
                                  is_list(Options) ->
   DefBRate = case application:get_env(can_baudrate) of
-               undefined   -> 1000000;
-               Other1 when
-                 is_integer(Other1),
-                 Other1 > 0 -> Other1
+               undefined ->
+                 1000000;
+               {ok, Other1} when is_integer(Other1),
+                                  Other1 > 0 ->
+                 Other1
              end, 
   DefMask  = case application:get_env(can_mask) of
-               undefined    -> [0, 0, 0, 0, 0];
-               Other2 when
-                 is_list(Other2),
-                 length(Other2) == 5 -> Other2
+               undefined ->
+                 [0, 0, 0, 0, 0];
+               {ok, Other2} when is_list(Other2),
+                                 length(Other2) == 5 ->
+                 Other2
              end,
   DefRaw   = case application:get_env(can_raw_mode) of
-               undefined                   -> false;
-               Bool when is_boolean(Bool) -> Bool
+               undefined ->
+                 false;
+               {ok, Bool} when is_boolean(Bool) ->
+                 Bool
              end,
   DefChunk = case application:get_env(can_read_chunk_size) of
-               undefined    -> 128;
-               Other3 when
-                 is_integer(Other3),
-                 Other3 > 0 -> Other3
+               undefined ->
+                 128;
+               {ok, Other3} when is_integer(Other3),
+                                 Other3 > 0 ->
+                 Other3
              end,
   DefTout  = case application:get_env(can_read_chunk_size) of
-               undefined    -> 2500000; % 2.5 ms = 2.5*10^6 ns
-               Other4 when
-                 is_integer(Other4),
-                 Other4 >= 0 -> Other4
+               undefined ->
+                 2500000; % 2.5 ms = 2.5*10^6 ns
+               {ok, Other4} when is_integer(Other4),
+                                 Other4 >= 0 ->
+                 Other4
              end,
   BaudRate = get_option(baudrate, Options, DefBRate),
   Mask     = get_option(mask, Options, DefMask),
@@ -112,8 +118,8 @@ send (Handle, Ms) ->
 
 recv (Handle) ->
   recv(Handle, case application:get_env(can_recv_chunk_size) of
-                  undefined -> 32;
-                 Value     -> Value
+                 undefined   -> 32;
+                 {ok, Value} -> Value
                end). 
 
 recv (Handle, ChunkSize) ->

@@ -155,6 +155,7 @@ listener (Handle, Receiver, ChunkSize, Timeout) when is_pid(Receiver),
                                                      Timeout > 0->
   case Handle of
     <<>> -> self();
+    <<1>> -> 0;
     _    -> -1004
   end.
 
