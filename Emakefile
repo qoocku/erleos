@@ -1,5 +1,7 @@
 % -*- mode: erlang -*-
-{['src/*.erl', 'tests/*.erl'], 
+{["src/*", "test/*"], 
  [{i, "include"},
   {outdir, "ebin"},
-  debug_info, native]}.
+  {'CAN_drv', []},
+  {'mqueue_drv', []},
+  {'*', [debug_info, native]}]}.

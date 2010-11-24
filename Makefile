@@ -19,9 +19,11 @@ lincan:
 	
 no_lincan:
 	$(error LINCAN_ROOT parameter or environment variable should be set)
+
+purge: clean
+	rm -f .def.*
 	
 clean:
-	rm -f .def.*
 	rm -f ebin/*.beam
 	rm -f c_src/*.o
 	rm -f priv/*.so
