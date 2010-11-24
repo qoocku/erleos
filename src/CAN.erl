@@ -1,7 +1,8 @@
 %%% ==========================================================================
 %%% @author Damian T. Dobroczy\\'nski <qoocku@gmail.com>
 %%% @since 2010-11-21
-%%% @doc CAN user API.
+%%% @doc CAN user high-level API. The functions are designed to provide more human
+%%%      friendly API to low-level `CAN_drv' module.
 %%% @end
 %%% ==========================================================================
 -module ('CAN').
@@ -21,7 +22,15 @@
 %%% API Functions
 %%% ==========================================================================
 
--type handle() :: 'CAN_drv':handle().
+-opaque handle()      :: 'CAN_drv':handle().
+-type open_result ()  :: {ok, handle()} | {error, term()}.
+-type open_options () :: [{raw,      boolean()}     |
+                          {baudrate, pos_integer()} |
+                          {filter, list(integer())} |
+                          {active, pid()}].
+-spec open () -> open_result().
+-spec open (string()) -> open_result().
+-spec open (string(), open_options()) -> open_result().
 
 open () ->
   open (case application:get_env(can_device_path) of
@@ -95,6 +104,12 @@ send (Handle, Ms) ->
     -2002               -> {error, bad_3d_arg}
   end.
 
+-type recv_result () :: {ok, 'CAN_drv':recv_result()} |
+                         {error, term()}
+-spec recv (handle()) -> recv_result().
+-spec recv (handle(), pos_integer()) -> recv_result().
+-spec recv (handle(), pos_integer(), non_neg_integer()) -> recv_result().
+
 recv (Handle) ->
   recv(Handle, case application:get_env(can_recv_chunk_size) of
                   undefined -> 32;
@@ -111,6 +126,8 @@ recv (Handle, ChunkSize, Timeout) ->
       when Error < 0 -> {error, Error};
     Other             -> Other
   end.
+
+-spec close (handle) -> ok | {error, term()}.
 
 close (Handle) ->
   case 'CAN_drv':close(Handle) of

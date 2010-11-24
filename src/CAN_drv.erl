@@ -148,9 +148,7 @@ close (Handle) ->
 %%      The thread sends `{can, DeviceOSDecriptor, Messages}' messages
 %%      to the receiver. `DeviceOSDescriptor' is the OS low-level file
 %%      descriptor of a CAN port, `Messages' is the same as the return
-%%      value of `recv/3' function.
-%%
-%% @see recv/3
+%%      value of {@link `recv/3'} function.
 
 listener (Handle, Receiver, ChunkSize, Timeout) when is_pid(Receiver),
                                                      ChunkSize > 0,
