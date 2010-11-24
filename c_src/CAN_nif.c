@@ -322,8 +322,7 @@ _receive_can_messages (ErlNifEnv* env,
 {
   int length        = 0,
       i              = 0,
-      chunks         = 0,
-      bytes_in_chunk = sizeof(canmsg_t) * chunk_size;
+      chunks         = 0;
   ERL_NIF_TERM *list, result;
   canmsg_t     buffer[sizeof(ERL_NIF_TERM) * BUFFER_LIMIT];
   do {
@@ -335,8 +334,8 @@ _receive_can_messages (ErlNifEnv* env,
         goto end;
       }
     length = read(handle->device, &buffer[chunks], sizeof(canmsg_t) * chunk_size);
-    if (length < 0 || length < bytes_in_chunk) break;
-    chunks += chunk_size;
+    if (length < 0) break;
+    chunks += length / sizeof(canmsg_t) ;
   } while (length > 0 && chunks <= BUFFER_LIMIT);
   if (chunks > 0)
     {
