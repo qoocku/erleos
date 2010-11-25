@@ -1,7 +1,7 @@
 lincan_check = $(if $(LINCAN_ROOT), lincan, no_lincan)
-test         = $(if $(etest), etest, no_etest)
+eunit_tests  = $(if $(eunit), eunit, no_eunit)
 
-all: $(lincan_check) defaults beams dlls $(test)
+all: $(lincan_check) defaults beams dlls $(eunit_tests)
 	
 defaults: .def.erlroot .def.erts.vsn
 
@@ -16,10 +16,10 @@ dlls = ${foreach i,${notdir ${filter-out c_src/nif_utils.c,${wildcard c_src/*.c}
 beams = ${wildcard src/*.erl tests/*.erl}
 CFLAGS = -Wall -I ${erl_root}/erts-${erts_vsn}/include -fpic -O3 -I ${LINCAN_ROOT}/include
 
-etest:
-	@erl -pa ebin -noshell -eval '$(etest)_tests:test()' -s init stop
+eunit:
+	@erl -pa ebin -noshell -eval 'eunit:test(${subst _tests,,$(eunit:.erl=)}_tests, [verbose])' -s init stop
 
-no_etest:
+no_eunit:
 
 lincan:
 	
@@ -27,7 +27,7 @@ no_lincan:
 	$(error LINCAN_ROOT parameter or environment variable should be set)
 
 doc: ${wildcard src/*.erl}
-	erl -pa ebin -noshell -eval 'edoc:application(erleos, ".", [])' -s init stop
+	erl -pa ebin -noshell -eval 'edoc:application(erleos, ".", [{preprocess, true}, {includes, "include"}])' -s init stop
 
 purge: clean
 	rm -f .def.*

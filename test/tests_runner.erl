@@ -1,43 +1,45 @@
 %%% ==========================================================================
 %%% @author Damian T. Dobroczy\\'nski <qoocku@gmail.com>
-%%% @since 24-11-2010
-%%% @doc Sensor process API.
+%%% @since 25-11-2010
+%%% @doc EUnit Tests Runner
 %%% @end
 %%% ==========================================================================
--module (erleos_sensor).
+-module (tests_runner).
 -author ("Damian T. Dobroczy\\'nski <qoocku@gmail.com>").
 
-%%% ==========================================================================
-%%% I n c l u d e d  F i l e s
-%%% ==========================================================================
-
-%%%-include_lib ().
--include ("types.hrl").
--include ("proto/sensor.hrl").
+-include_lib ("eunit/include/eunit.hrl").
 
 %%% ==========================================================================
 %%% E x p o r t e d  A P I  F u n c t i o n s
 %%% ==========================================================================
 
--export ([get_last_reading/1]).
-
-%%% ==========================================================================
-%%% E x p o r t e d  I n t e rn a l  F u n c t i o n s
-%%% ==========================================================================
-
--export ([]).
+-export ([run/3, run/4]).
 
 %%% ==========================================================================
 %%% A P I  F u n c ti o n s
 %%% ==========================================================================
 
-%% @doc Gets last recorded scan from given sensor.
+run (Setup, Cleanup, Module) ->
+  run (Setup, Cleanup, "test ", Module).
 
--spec get_last_reading (server_ref()) -> {ok, reading()}. 
+run (Setup, Cleanup, Prefix, Module) ->
+  {foreach,
+   Setup,
+   Cleanup,
+   [
+    fun (C) ->
+        [{atom_to_list(F), fun () -> Module:F(C) end}]
+    end || 
+    {F, 1} <- lists:filter(fun
+                             ({E, 1}) ->
+                             lists:prefix(Prefix, atom_to_list(E));
+                             (_) ->
+                             false
+                           end, Module:module_info(exports))
+   ]}.
 
-get_last_reading (Sensor) ->
-  gen_server:call(Sensor, get_last_reading).
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s
 %%% ==========================================================================
+
