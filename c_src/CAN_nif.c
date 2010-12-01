@@ -104,7 +104,7 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_int(env, -2000);
   handle = enif_alloc_resource(CAN_handle_type, sizeof(CAN_handle));
   memset(handle, 0, sizeof(CAN_handle));
-  handle->device = open((const char*)dev_path,  O_RDWR | O_SYNC);
+  handle->device = open((const char*)dev_path,  O_RDWR);
   if (!enif_get_int(env, argv[1], &handle->raw))
     return enif_make_int(env, -2001);
   handle->threaded = 0;
@@ -301,11 +301,12 @@ _wait_for_input (CAN_handle* handle, unsigned long timeout)
   fd_set readSet;
   FD_ZERO(&readSet);
   FD_SET(handle->device, &readSet);
-  struct timespec time = { 0, timeout };
-  status = pselect(handle->device + 1, &readSet, NULL, NULL, &time, NULL);
+  struct timeval time = { 0, timeout };
+  status = select(FD_SETSIZE, &readSet, NULL, NULL, &time);
+  //status = select(handle->device, &readSet, NULL, NULL, &time, NULL);
   if (status == -1) {
       return errno;
-  } else if (status > 0) {
+  } else if (status >= 0) {
       return 0;
   } else { //timeout
       return -1;
@@ -320,13 +321,14 @@ _receive_can_messages (ErlNifEnv* env,
                         unsigned int chunk_size,
                         unsigned long timeout)
 {
-  int length        = 0,
+  int length         = 0,
       i              = 0,
       chunks         = 0;
   ERL_NIF_TERM *list, result;
   canmsg_t     buffer[sizeof(ERL_NIF_TERM) * BUFFER_LIMIT];
   do {
     int status = _wait_for_input(handle, timeout);
+    enif_fprintf(stdout, "status: %i\n", status);
     if (status == -1) continue;
     if (status != 0)
       {
@@ -334,6 +336,7 @@ _receive_can_messages (ErlNifEnv* env,
         goto end;
       }
     length = read(handle->device, &buffer[chunks], sizeof(canmsg_t) * chunk_size);
+    enif_fprintf(stdout, "length: %i\n", length);
     if (length < 0) break;
     chunks += length / sizeof(canmsg_t) ;
   } while (length > 0 && chunks <= BUFFER_LIMIT);
