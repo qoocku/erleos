@@ -28,8 +28,8 @@ struct _CAN_Handle {
   ErlNifPid receiver;
   ErlNifTid tid;
   int       threaded;
-  unsigned chunk_size;
-  unsigned long timeout;
+  unsigned  chunk_size;
+  long      timeout;
   int       raw;
 };
 
@@ -104,7 +104,7 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_int(env, -2000);
   handle = enif_alloc_resource(CAN_handle_type, sizeof(CAN_handle));
   memset(handle, 0, sizeof(CAN_handle));
-  handle->device = open((const char*)dev_path,  O_RDWR);
+  handle->device = open((const char*)dev_path,  O_RDWR | O_SYNC);
   if (!enif_get_int(env, argv[1], &handle->raw))
     return enif_make_int(env, -2001);
   handle->threaded = 0;
@@ -124,7 +124,7 @@ static ERL_NIF_TERM
 _receive_can_messages (ErlNifEnv* env,
                         CAN_handle* handle,
                         unsigned int chunk_size,
-                        unsigned long timeout);
+                        long timeout);
 
 static void*
 _reading_thread (void* arg)
@@ -159,7 +159,9 @@ _listener (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   ErlNifPid pid = { 0 }; // NOTE: breaking opaque type!
   enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
   if (handle->threaded) // there is a thread already and some pid!
+  {
     pid = handle->receiver;
+  }
   if (!enif_get_local_pid(env, argv[1], &handle->receiver)) // NOTE: use lock if pid type is structural!
     {
       handle->threaded = 0;
@@ -168,7 +170,7 @@ _listener (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   else
     {
       enif_get_uint(env, argv[2], &handle->chunk_size);
-      enif_get_ulong(env, argv[3], &handle->timeout);
+      enif_get_long(env, argv[3], &handle->timeout);
       if (!handle->threaded) // a thread was not created already
         {
           if (enif_thread_create("can_reading_thread",
@@ -295,51 +297,55 @@ end:
 }
 
 static int
-_wait_for_input (CAN_handle* handle, unsigned long timeout)
+_wait_for_input (CAN_handle* handle, long timeout)
 {
   int status;
   fd_set readSet;
   FD_ZERO(&readSet);
   FD_SET(handle->device, &readSet);
-  struct timeval time = { 0, timeout };
+#if 1  
+  struct timeval time;
+  time.tv_sec = timeout / 1000000;
+  time.tv_usec = timeout % 1000000;
   status = select(FD_SETSIZE, &readSet, NULL, NULL, &time);
-  //status = select(handle->device, &readSet, NULL, NULL, &time, NULL);
+#else
+  struct timespec time = {0, timeout};
+  status = pselect(handle->device+1, &readSet, NULL, NULL, &time, NULL);
+#endif
   if (status == -1) {
       return errno;
   } else if (status >= 0) {
-      return 0;
+      return status;
   } else { //timeout
       return -1;
   }
 }
 
-#define BUFFER_LIMIT 500
+#define BUFFER_LIMIT 2048
 
 static ERL_NIF_TERM
 _receive_can_messages (ErlNifEnv* env,
                         CAN_handle* handle,
                         unsigned int chunk_size,
-                        unsigned long timeout)
+                        long timeout)
 {
   int length         = 0,
       i              = 0,
       chunks         = 0;
   ERL_NIF_TERM *list, result;
-  canmsg_t     buffer[sizeof(ERL_NIF_TERM) * BUFFER_LIMIT];
+  canmsg_t     buffer[sizeof(canmsg_t) * BUFFER_LIMIT];
   do {
     int status = _wait_for_input(handle, timeout);
-    enif_fprintf(stdout, "status: %i\n", status);
-    if (status == -1) continue;
-    if (status != 0)
+    if (status == 0) break;
+    if (status == -1)
       {
-        result = enif_make_int(env, status);
+        result = enif_make_int(env, errno);
         goto end;
       }
     length = read(handle->device, &buffer[chunks], sizeof(canmsg_t) * chunk_size);
-    enif_fprintf(stdout, "length: %i\n", length);
     if (length < 0) break;
     chunks += length / sizeof(canmsg_t) ;
-  } while (length > 0 && chunks <= BUFFER_LIMIT);
+  } while (length > 0 && chunks <= BUFFER_LIMIT && chunks < chunk_size);
   if (chunks > 0)
     {
     if (handle->raw)
@@ -376,11 +382,11 @@ _recv  (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   CAN_handle* handle;
   unsigned int chunk_size;
-  ErlNifUInt64 timeout;
+  long timeout;
   ERL_NIF_TERM result;
   enif_get_resource(env, argv[0], CAN_handle_type, (void**) &handle);
   enif_get_uint(env, argv[1], &chunk_size);
-  enif_get_uint64(env,argv[2], &timeout);
+  enif_get_long(env,argv[2], &timeout);
   result = _receive_can_messages(env, handle, chunk_size, timeout);
   return result;
 }
