@@ -363,7 +363,12 @@ _receive_can_messages (ErlNifEnv* env,
         ERL_NIF_TERM bin;
         void* data = enif_make_new_binary(env, can_msg->length, &bin);
         memcpy(data, can_msg->data, can_msg->length);
-        list[i] = enif_make_tuple2(env, enif_make_int(env, can_msg->id), bin);
+        list[i] = enif_make_tuple3(env,
+                                   enif_make_int(env, can_msg->id),
+                                   enif_make_tuple2(env,
+                                                    enif_make_long(env, can_msg->timestamp.tv_sec),
+                                                    enif_make_long(env, can_msg->timestamp.tv_usec)),
+                                   bin);
         }
       result = enif_make_list_from_array(env, list, chunks);
       enif_free(list);

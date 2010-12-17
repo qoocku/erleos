@@ -112,7 +112,7 @@ send (Handle, Ms) when Handle =/= undefined, is_list(Ms) ->
 %%      reading operation in non-block mode). The frames
 %%      will be read in packets containing `ChunkSize'
 %%      frames. Returns `0' if no data is available yet or
-%%      list of tuples `{Source, Data}' or "non-raw" read mode
+%%      list of tuples `{Source, Timestamp, Data}' or "non-raw" read mode
 %%      (where `Source' is an id and `Data' is a binary) or
 %%      a binary (possibly huge) in case of "raw" mode containing
 %%      the whole input buffer just read.
@@ -136,7 +136,7 @@ close (Handle) ->
   end.
 
 %% @doc Puts the driver in <emph>active</emph> mode. A special
-%%      thread is created which tries to read the CAN port with
+%%      thread is created which tries to read `ChunkSize` frames from the CAN port with
 %%      the given timeout (see {@link recv/3}). The received frames
 %%      are sent to the `Receiver' process in a form specified
 %%      during opening the port (see {@link open/2}). The function
@@ -146,9 +146,18 @@ close (Handle) ->
 %%      1st time or negative integer indicating an error.
 %%     
 %%      The thread sends `{can, DeviceOSDecriptor, Messages}' messages
-%%      to the receiver. `DeviceOSDescriptor' is the OS low-level file
+%%      to the receiver with minimum frequency equals to `1/Timeout`.
+%%      `DeviceOSDescriptor' is the OS low-level file
 %%      descriptor of a CAN port, `Messages' is the same as the return
 %%      value of {@link `recv/3'} function.
+%%
+%%      
+%% @spec (Handle, Receiver, ChunkSize, Timeout) -> integer() | Messages
+%% where Handle    = any(),
+%%       Receiver  = pid(),
+%%       ChunkSize = pos_integer(),
+%%       Timeout   = pos_integer(),
+%%       Messages  = [{can, pos_integer(), binary()}]
 
 listener (Handle, Receiver, ChunkSize, Timeout) when is_pid(Receiver),
                                                      ChunkSize > 0,
