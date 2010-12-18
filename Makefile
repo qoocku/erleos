@@ -1,9 +1,11 @@
 lincan_check = $(if $(LINCAN_ROOT), lincan, no_lincan)
 eunit_tests  = $(if $(eunit), eunit, no_eunit)
 
-all: $(lincan_check) defaults beams dlls $(eunit_tests)
+all: $(lincan_check) defaults deps beams dlls $(eunit_tests)
 	
 defaults: .def.erlroot .def.erts.vsn
+
+deps:
 
 .def.erlroot:
 	${shell erl -eval 'io:format("~s", [code:root_dir()])' -s init stop -noshell > $@}
@@ -17,7 +19,7 @@ beams = ${wildcard src/*.erl tests/*.erl}
 CFLAGS = -Wall -I ${erl_root}/erts-${erts_vsn}/include -fpic -O3 -I ${LINCAN_ROOT}/include
 
 eunit:
-	@erl -pa ebin -noshell -eval 'eunit:test(${subst _tests,,$(eunit:.erl=)}_tests, [verbose])' -s init stop
+	@erl -env ERL_LIBS deps -pa ebin -noshell -eval 'eunit:test(${subst _tests,,$(eunit:.erl=)}_tests, [verbose])' -s init stop
 
 no_eunit:
 

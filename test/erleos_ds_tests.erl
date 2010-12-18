@@ -57,7 +57,7 @@ create_mock_ds_server () ->
                                    (#ds_subscribe{ds = ds, tf = Tf, rcv = Rcv}, _, D) ->
                                      UF = fun (List) -> [{Rcv, Tf}|List] end,
                                      {reply, ok, dict:update(ds, UF, D)};
-                                   (#ds_subscribe{ds = DS}, _, D) ->
+                                   (#ds_subscribe{ds = _DS}, _, D) ->
                                      {reply, {error, undefined}, D};
                                    (#ds_unsubscribe{ds = ds, rcv = Rcv}, _, D) ->
                                      UF = fun (List) ->
@@ -68,5 +68,5 @@ create_mock_ds_server () ->
                                      {stop, normal, ok, D}
                                end},
                  {handle_cast, fun (shutdown, D) -> {stop, normal, D} end},
-                 {terminate,   fun (_, D) -> ok end}]),
+                 {terminate,   fun (_, _) -> ok end}]),
   mock_ds_srv.
