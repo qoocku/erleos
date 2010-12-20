@@ -19,7 +19,7 @@ beams = ${wildcard src/*.erl tests/*.erl}
 CFLAGS = -Wall -I ${erl_root}/erts-${erts_vsn}/include -fpic -O3 -I ${LINCAN_ROOT}/include
 
 eunit:
-	@erl -env ERL_LIBS deps -pa ebin -noshell -eval 'eunit:test(${subst _tests,,$(eunit:.erl=)}_tests, [verbose])' -s init stop
+	@erl -env ERL_LIBS deps -pa ebin -noshell -eval "eunit:test('${subst _tests,,$(eunit:.erl=)}_tests', [verbose])" -s init stop
 
 no_eunit:
 
