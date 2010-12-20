@@ -140,12 +140,17 @@ handle_cast (shutdown, State) ->
 %% ---------------------------------------------------------------------------
 
 handle_info (Msg = {DsType, DsId, _}, State = #state{tbl = T}) ->
-  lists:foreach(fun ({R, Tf}) ->
-                    R ! Tf(Msg)
-                end, case ets:lookup(T, Key = {DsType, DsId}) of
+  [{{source, _}, {Mod, Env}}] = ets:lookup(T, {source, {DsType, DsId}}),
+  SFun                       = fun (Data, Env1) -> Mod:send(DsType, DsId, Data, Env1) end,           
+  Env0 = lists:foldl(fun ({RList, Tf}, Acc) ->
+                           [SFun(Tf(Msg), Acc) || R <- RList]
+                     end,
+                     Env,
+                     case ets:lookup(T, Key = {DsType, DsId}) of
                        []          -> [];
                        [{Key, Rs}] -> Rs 
                      end),
+  true = ets:insert(T, {{source, {DsType, DsId}}, {Mod, Env0}}),
   {noreply, State}.
 
 %% ---------------------------------------------------------------------------
