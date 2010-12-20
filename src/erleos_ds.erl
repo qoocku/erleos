@@ -24,7 +24,9 @@
 -export ([behavior_info/1,
           subscribe/2,
           subscribe/3,
-          unsubscribe/2]).
+          subscribe/4,
+          unsubscribe/2,
+          unsubscribe/3]).
 
 %%% ==========================================================================
 %%% E x p o r t e d  I n t e rn a l  F u n c t i o n s
@@ -45,6 +47,7 @@ behavior_info (_) ->
 
 -spec subscribe (server_ref(), data_source()) -> ok | {error, undefined}.
 -spec subscribe (server_ref(), data_source(), transform_fun()) -> ok | {error, undefined}.
+-spec subscribe (server_ref(), data_source(), transform_fun(), receivers()) -> ok | {error, undefined}.
 
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
 %% @equiv subscribe(Server, DataSource, fun (X) -> X end)
@@ -55,18 +58,33 @@ subscribe (Server, DataSource) ->
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
 %%      The data will be (on server side) transformed using supplied by the
 %%      subscriber transform function.
-%% @equiv subscribe(Server, DataSource, fun (X) -> X end)
+%% @equiv subscribe(Server, DataSource, TransferFun, [self()])
 
-subscribe (Server, DataSource, TransferFun) ->
+subscribe (Server, DataSource, TransferFun) 
+  when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),
+        is_function(TransferFun) ->
+  subscribe (Server, DataSource, TransferFun, [self()]).
+
+subscribe (Server, DataSource, TransferFun, Receivers) 
+  when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),
+        is_function(TransferFun) ->  
   gen_server:call(Server, #ds_subscribe{ds  = DataSource,
                                         tf  = TransferFun,
-                                        rcv = self()}).
+                                        rcv = Receivers}).
 
 %% @doc Unsubscribes for data of `DataSource' type on data source `Server'.
 
-unsubscribe (Server, DataSource) ->
+-spec unsubscribe (server_ref(), data_source()) -> ok | {error, undefined}.
+-spec unsubscribe (server_ref(), data_source(), receivers()) -> ok | {error, undefined}.
+
+unsubscribe (Server, DataSource) when  is_pid(Server) ; is_atom(Server) ; is_tuple(Server) ->
+  unsubscribe (Server, DataSource, self()).
+
+unsubscribe (Server, DataSource, Receiver)
+  when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),
+        (is_pid(Receiver) orelse is_atom(Receiver) orelse is_tuple(Receiver)) ->
   gen_server:call(Server, #ds_unsubscribe{ds  = DataSource,
-                                          rcv = self()}).
+                                          rcv = Receiver}).
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

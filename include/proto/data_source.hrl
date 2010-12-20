@@ -7,19 +7,21 @@
 %% @type transform_fun() = fun((any()) -> {ok, any()} | {error, any()}). Function
 %%       transforming source data from origin type to subscriber type. 
 -type transform_fun() :: fun((any()) -> {ok, any()} | {error, any()}).
+-type receiver()  :: pid() | atom() | {node(), atom()}.
+-type receivers() :: [receiver()].
 
 %% @type ds_subscribe() = #ds_subscribe{ds  = data_source(),
 %%                                      tf  = transform_fun(),
-%%                                      rcv = pid()}. Subscribe message.
+%%                                      rcv = [pid() | atom() | {node(), atom()}]}. Subscribe message.
 -record (ds_subscribe,{ds  :: data_source(),
                        tf  :: transform_fun(),
-                       rcv :: pid()}).
+                       rcv :: receivers()}).
 -type ds_subscribe() :: #ds_subscribe{}.
 
-%% @type ds_subscribe() = #ds_subscribe{ds  = data_source(),
-%%                                      rcv = pid()}. Unsubscribe message.
+%% @type ds_unsubscribe() = #ds_subscribe{ds  = data_source(),
+%%                                      rcv = [pid() | atom() | {node(), atom()}]}. Unsubscribe message.
 -record (ds_unsubscribe,{ds  :: data_source(),
-                         rcv :: pid()}).
+                         rcv :: receiver()}).
 -type ds_unsubscribe() :: #ds_unsubscribe{}.
 
 -endif.
