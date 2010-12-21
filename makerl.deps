@@ -1,0 +1,6 @@
+deps: meck
+
+meck: deps/meck/Makefile
+ 
+deps/meck/Makefile:  
+	cd deps ; git clone https://github.com/eproxus/meck.git ; cd meck ; make

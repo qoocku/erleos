@@ -1,11 +1,14 @@
-lincan_check = $(if $(LINCAN_ROOT), lincan, no_lincan)
-eunit_tests  = $(if $(eunit), eunit, no_eunit)
+eunit_tests  := $(if $(eunit), eunit, no_eunit)
 
-all: $(lincan_check) defaults deps beams dlls $(eunit_tests)
+all: $(lincan_check) defaults depsdir beams dlls $(eunit_tests)
 	
 defaults: .def.erlroot .def.erts.vsn
 
-deps:
+depsdir:
+	@if [ ! -d deps ] ; then mkdir deps ; fi
+
+-include makerl.config
+-include makerl.deps
 
 .def.erlroot:
 	${shell erl -eval 'io:format("~s", [code:root_dir()])' -s init stop -noshell > $@}
@@ -21,12 +24,13 @@ CFLAGS = -Wall -I ${erl_root}/erts-${erts_vsn}/include -fpic -O3 -I ${LINCAN_ROO
 eunit:
 	@erl -env ERL_LIBS deps -pa ebin -noshell -eval 'eunit:test(${subst _tests,,$(eunit:.erl=)}_tests, [verbose])' -s init stop
 
+eunit-all: ${foreach b,${wildcard ebin/*_tests.beam}, $(b)_doit}
+		
+eunit-deps: ${foreach b,${wildcard deps/*/ebin/*_tests.beam}, $(b)_doit}
+
 no_eunit:
 
-lincan:
-	
-no_lincan:
-	$(error LINCAN_ROOT parameter or environment variable should be set)
+no_deps_eunit:
 
 doc: ${wildcard src/*.erl}
 	erl -pa ebin -noshell -eval 'edoc:application(erleos, ".", [{preprocess, true}, {includes, "include"}])' -s init stop
@@ -48,3 +52,9 @@ priv/%.so: c_src/%.o
 	${CC} -shared -o $@ $<
 	
 c_src/%.o: c_src/%.c 
+
+${foreach b,${wildcard ebin/*_tests.beam}, $(b)_doit}:
+	@erl -env ERL_LIBS deps -pa ebin -noshell -eval "eunit:test('${notdir $(@:.beam_doit=)}', [verbose])" -s init stop
+	
+${foreach b,${wildcard deps/*/ebin/*_tests.beam}, $(b)_doit}:
+	@erl -env ERL_LIBS deps -noshell -eval "eunit:test('${notdir $(@:.beam_doit=)}', [verbose])" -s init stop ; fi	
