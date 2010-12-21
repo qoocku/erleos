@@ -82,7 +82,7 @@ init ([Name, ModsDef]) when is_atom(Name), is_list(ModsDef) ->
           _         -> Name
         end,
   T   = fun ({Mod, Args}) ->
-            {ok, Ds = {DsType, DsId}, Env} = Mod:init(Args),
+            {ok, Ds = {_DsType, _DsId}, Env} = Mod:init(Args),
             ets:insert(Name, {{source, Ds}, {Mod, Env}}),
             Mod:run(self(), Env)
         end,
@@ -135,26 +135,35 @@ handle_cast (shutdown, State) ->
   {stop, normal, State}.
 
 %% ---------------------------------------------------------------------------
-%% @doc Handling all non call/cast messages
+%% @doc Handling all non call/cast messages (typically coming from REAL data sources).
+%%      Used to accept real data from real devices.
+%%      For example `DsType` would be `tcp` and `DsId` would be `{IP, Port}`
+%%      and so on.
 %% @end
 %% ---------------------------------------------------------------------------
 
-handle_info (Msg = {DsType, DsId, _}, State = #state{tbl = T}) ->
-  [{{source, _}, {Mod, Env}}] = ets:lookup(T, {source, {DsType, DsId}}),
-  SFun                       = fun (Data, Env1) -> Mod:send(DsType, DsId, Data, Env1) end,           
+handle_info (Msg = {DsType, DsId, _Data}, State = #state{tbl = T}) ->
+  % get the data source description (`Ds`)
+  [{{source, _}, {Mod, Env}}] = ets:lookup(T, {source, Ds = {DsType, DsId}}),
+  % get the signal reception function
+  SFun                        = fun (Data, Env1) -> Mod:init_reception(DsType, DsId, Data, Env1) end,
+  % the signal reception
   Env0 = lists:foldl(fun ({RList, Tf}, Acc) ->
-                           [SFun(Tf(Msg), Acc) || R <- RList]
+                           [SFun(R, Tf(Msg), Acc) || R <- RList]
                      end,
                      Env,
-                     case ets:lookup(T, Key = {DsType, DsId}) of
+                     case ets:lookup(T, Ds) of
                        []          -> [];
-                       [{Key, Rs}] -> Rs 
+                       [{Ds, Rs}] -> Rs 
                      end),
-  true = ets:insert(T, {{source, {DsType, DsId}}, {Mod, Env0}}),
+  % the end of the joy
+  Env1 = Mod:finish_reception(DsType, DsId, Env0),
+  % save the callback module state
+  true = ets:insert(T, {{source, {DsType, DsId}}, {Mod, Env1}}),
   {noreply, State}.
 
 %% ---------------------------------------------------------------------------
-%% @doc Shutdown the server
+%% @doc Shutdown the server.
 %% @end
 %% ---------------------------------------------------------------------------
 
@@ -170,9 +179,10 @@ terminate (_Reason, #state{tbl = T}) ->
 
 %% --------------------------------------------------------------------
 %% @doc Convert process state when code is changed.
+%% @end
 %% --------------------------------------------------------------------
 
-code_change (_OldVsn, State, Extra) ->
+code_change (_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %%% ====================================================================
