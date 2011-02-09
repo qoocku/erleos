@@ -83,7 +83,10 @@ open (DevicePath, Options) when is_list(DevicePath),
   Receiver = proplists:get_value(active, Options, undefined),
   Chunks   = get_option(chunk_size, Options, DefChunk),
   Timeout  = get_option(timeout, Options, DefTout),
-  open_can(DevicePath, Receiver, BaudRate, Mask, Raw, Chunks, Timeout).
+  case open_can(DevicePath, Receiver, BaudRate, Mask, Raw, Chunks, Timeout) of
+	{error, N} -> {error, 'CAN_drv':translate_errno(N)};
+	Other      -> Other
+  end.
 
 -spec send (handle(), [{pos_integer(), binary()}]) ->
          {ok, {non_neg_integer(), non_neg_integer()}} | {error, term()}.
@@ -152,7 +155,7 @@ open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->
                                     undefined -> 0
                                   end) of
 
-    ErrorNumber when ErrorNumber < 0 -> 
+    ErrorNumber when ErrorNumber =/= 0 -> 
       {error, ErrorNumber};
     C ->
       case set_baudrate(C, BaudRate) of
