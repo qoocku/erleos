@@ -23,7 +23,7 @@
 
 -export ([behavior_info/1,
           subscribe/2,
-          subscribe/3,
+          subscribe/4,
           unsubscribe/2]).
 
 %%% ==========================================================================
@@ -44,21 +44,26 @@ behavior_info (_) ->
   undefined.
 
 -spec subscribe (server_ref(), data_source()) -> ok | {error, undefined}.
--spec subscribe (server_ref(), data_source(), transform_fun()) -> ok | {error, undefined}.
+-spec subscribe (server_ref(), data_source(), 
+                 accept_fun(), transform_fun()) -> ok | {error, undefined}.
 
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
-%% @equiv subscribe(Server, DataSource, fun (X) -> X end)
+%% @equiv subscribe(Server, DataSource, fun (_) -> true end, fun (X) -> X end)
 
 subscribe (Server, DataSource) ->
-  subscribe(Server, DataSource, fun (X) -> X end).
+  subscribe(Server,
+			DataSource,
+			fun (_) -> true end,
+			fun (X) -> X end).
 
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
 %%      The data will be (on server side) transformed using supplied by the
 %%      subscriber transform function.
 %% @equiv subscribe(Server, DataSource, fun (X) -> X end)
 
-subscribe (Server, DataSource, TransferFun) ->
+subscribe (Server, DataSource, AcceptFun, TransferFun) ->
   gen_server:call(Server, #ds_subscribe{ds  = DataSource,
+										af  = AcceptFun,
                                         tf  = TransferFun,
                                         rcv = self()}).
 

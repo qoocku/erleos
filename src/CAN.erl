@@ -70,7 +70,7 @@ open (DevicePath, Options) when is_list(DevicePath),
                                  Other3 > 0 ->
                  Other3
              end,
-  DefTout  = case application:get_env(can_read_chunk_size) of
+  DefTout  = case application:get_env(can_timeout) of
                undefined ->
                  2500000; % 2.5 ms = 2.5*10^6 ns
                {ok, Other4} when is_integer(Other4),
@@ -155,7 +155,7 @@ open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->
                                     undefined -> 0
                                   end) of
 
-    ErrorNumber when ErrorNumber =/= 0 -> 
+    ErrorNumber when is_integer(ErrorNumber), ErrorNumber =/= 0 -> 
       {error, ErrorNumber};
     C ->
       case set_baudrate(C, BaudRate) of

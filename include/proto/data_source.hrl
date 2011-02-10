@@ -8,10 +8,13 @@
 %%       transforming source data from origin type to subscriber type. 
 -type transform_fun() :: fun((any()) -> {ok, any()} | {error, any()}).
 
+-type accept_fun() :: fun ((any()) -> boolean()).
+
 %% @type ds_subscribe() = #ds_subscribe{ds  = data_source(),
 %%                                      tf  = transform_fun(),
 %%                                      rcv = pid()}. Subscribe message.
 -record (ds_subscribe,{ds  :: data_source(),
+					   af  :: accept_fun(),
                        tf  :: transform_fun(),
                        rcv :: pid()}).
 -type ds_subscribe() :: #ds_subscribe{}.
