@@ -51,7 +51,7 @@ setup3 () ->
 '(2) test subscribe' (#ctx{srv = S}) ->
   Self = self(),
   ?assertEqual(ok, erleos_ds:subscribe(S, {ds, specific})),
-  ?assertMatch([{{ds, specific}, [{Self, _}]}],
+  ?assertMatch([{{ds, specific}, [{[Self], _}]}],
                  ets:lookup(test_ds, {ds, specific})).
 
 '(2) test unsubscribe' (#ctx{srv = S} = Ctx) ->
@@ -67,7 +67,7 @@ setup3 () ->
   Self = self(),
   lists:foreach(fun (Sample) ->
                     ?assertEqual(ok, erleos_ds:subscribe(S, Sample)),
-                    ?assertMatch([{Sample, [{Self, _}]}],
+                    ?assertMatch([{Sample, [{[Self], _}]}],
                                  ets:lookup(test_ds, Sample))
                 end, Samples).
 
