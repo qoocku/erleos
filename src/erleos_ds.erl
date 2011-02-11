@@ -63,7 +63,11 @@ subscribe (Server, DataSource) ->
 subscribe (Server, DataSource, TransferFun) 
   when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),
         is_function(TransferFun) ->
-  subscribe (Server, DataSource, TransferFun, [self()]).
+  subscribe (Server, DataSource, TransferFun, [self()]);
+subscribe (Server, DataSource, Receivers) 
+  when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),
+        is_list(Receivers) ->
+  subscribe (Server, DataSource, fun (X) -> X end, Receivers).
 
 subscribe (Server, DataSource, TransferFun, Receivers) 
   when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),

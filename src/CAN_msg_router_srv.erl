@@ -33,6 +33,7 @@
 %%% ==============================================================================
 
 -record (state, {tid     = undefined :: ets:tid(),
+                 rtid    = undefined :: ets:tid(),
                  timeout = 50        :: pos_integer(),
                  can_dev = undefined :: any()}).
 
@@ -57,16 +58,17 @@ init (PropList) ->
   Timeout = proplists:get_value(timeout, PropList, DefTimeout),
   CanOpts = proplists:get_value(dev_opts, PropList, DefCanOpts),
   Tid     = ets:new(TabName, []),
+  RTid    = ets:new(list_to_atom("R_" ++ atom_to_list(TabName)), []),
   {ok, C} = open_can(CanPath, CanOpts),
   erlang:send_after(Timeout, self(), tick),
-  {ok, #state{tid = Tid, timeout = Timeout, can_dev = C}}.
+  {ok, #state{tid = Tid, rtid = RTid, timeout = Timeout, can_dev = C}}.
 
 handle_call (shutdown, From, State) ->
   NewState = close_can(State),
   gen_server:reply(From, ok),
   {stop, normal, NewState};
 handle_call (#ds_subscribe{ds = DSList, rcv = Receivers}, _From, State) ->
-  Result = do_subscribe(DSList, State),
+  Result = do_subscribe(DSList, Receivers, State),
   {reply, ok, State}.
 
 handle_cast (shutdown, State) ->
@@ -85,25 +87,31 @@ terminate (_Reason, State = #state{tid = Tid}) ->
 
 %%% ===============================================================================
 
-do_subscribe ([], _State) ->
+do_subscribe ([], _, _State) ->
   ok;
-do_subscribe ([{Ids, Targets}|Rest], State) when is_list(Ids) ->
+do_subscribe ({From, To}, Targets, State) ->
   lists:foreach(fun (Id) ->
-                  ok = do_subscribe([{Id, Targets}], State)
-                end, Ids);
-do_subscribe ([{Id, Targets}|Rest], State) when is_integer(Id) ->
-  ok = subscribe_one_source(Id, Targets, State),
-  do_subscribe(Rest, State);
-do_subscribe ([{{From, To}, Targets}|Rest], State) ->
-  lists:foreach(fun (Id) ->
-                  ok = subscribe_one_source(Id, Targets, State)
+                  ok = do_subscribe(Id, Targets, State)
                 end, lists:seq(From, To)),
-  do_subscribe(Rest, State).
-  
-subscribe_one_source (Id, Targets, State = #state{tid = Tid}) ->
-  RegisteredAlready = ets:lookup(Tid, Id),
-  true = ets:insert(Tid, {Id, RegisteredAlready ++ Targets}),
+  ok;
+do_subscribe (Id, Targets, State) when is_integer(Id) ->
+  subscribe_one_source(Id, Targets, State);
+do_subscribe (Ids, Targets, State) when is_list(Ids) ->
+  lists:foreach(fun (Id) ->
+                  ok = do_subscribe(Id, Targets, State)
+                end, Ids),
   ok.
+  
+subscribe_one_source (Id, Targets, State = #state{tid = Tid, rtid = RTid}) ->
+  [{Id, RegisteredAlready}] = case ets:lookup(Tid, Id) of
+                                []    -> [{Id, []}];
+                                Other -> Other
+                              end,
+  true = ets:insert(Tid, {Id, RegisteredAlready ++ Targets}),
+  lists:foldl(fun (Tgt, ok) ->
+                  true = ets:insert(RTid, {Tgt, []}),
+                  ok
+              end, ok, Targets).
     
 open_can (CanPath, CanOpts) ->
   Opts = lists:keydelete(active, 1, CanOpts), % remove unnecessary option
@@ -117,6 +125,16 @@ close_can (State = #state{can_dev = Dev}) ->
 
 save_reading ([], State) ->
   State;
-save_reading ([R={Id, Timestamp, Data}|Rest], State) ->
-  ?debugFmt("reading: ~p~n", [R]),
+save_reading ([R={Id, Timestamp, Data}|Rest], State = #state{tid = Tid, rtid = RTid}) ->
+  [{Id, Targets}]  = case ets:lookup(Tid, Id) of
+                       []     -> [{Id, []}];
+                       Others -> Others
+                     end,
+  lists:foreach(fun (Tgt) ->
+                  [{Tgt, Readings}] = case ets:lookup(RTid, Tgt) of
+                                        []    -> [{Tgt, []}];
+                                        Other -> Other
+                                      end,
+                  true              = ets:insert(RTid, {Tgt, [R|Readings]})
+                end, Targets),
   save_reading(Rest, State).

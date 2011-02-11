@@ -30,24 +30,34 @@ tear_down2 (#ctx{srv = S}) ->
   ok = erleos_utils:sync_stop(S).
 
 '(1) API: user may define list of id ranges with targets as pids or names' (#ctx{srv = S}) ->
-  List      = [{{1, 6}, tgt1},
-               {{7, 10}, self()}],
-  ?assertEqual(ok, erleos_ds:subscribe(S, List)).
+  List      = [{{1, 6}, [tgt1]},
+               {{7, 10}, [self()]}],
+  lists:foreach(fun ({Ds, Tgt}) ->
+                  ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
+                end, List).
 
 '(1) API: user may define list of standalone ids with targets as pids or names' (#ctx{srv = S}) ->
-  List      = [{1, self()},
-               {2, tgt2}],
-  ?assertEqual(ok, erleos_ds:subscribe(S, List)).
+  List      = [{1, [self()]},
+               {2, [tgt2]}],
+  lists:foreach(fun ({Ds, Tgt}) ->
+                  ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
+                end, List).
+
 
 '(1) API: user may define list of ids list with targets as pids or names' (#ctx{srv = S}) ->
-  List      = [{[1, 4, 5], self()},
-               {[2], tgt2}],
-  ?assertEqual(ok, erleos_ds:subscribe(S, List)).
+  List      = [{[1, 4, 5], [self()]},
+               {[2], [tgt2]}],
+  lists:foreach(fun ({Ds, Tgt}) ->
+                  ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
+                end, List).
+
 
 '(2) Reading: an example' (#ctx{srv = S}) ->
-  List      = [{[1, 4, 5], self()},
-               {[2], tgt2}],
-  ?assertEqual(ok, erleos_ds:subscribe(S, List)).
+  List      = [{[1, 4, 5], [self()]},
+               {[2], [tgt2]}],
+  lists:foreach(fun ({Ds, Tgt}) ->
+                  ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
+                end, List).
 
 %% -----------------------------------------------------------------------------
 %% @doc Tests Runner.
