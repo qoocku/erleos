@@ -62,8 +62,8 @@ init () ->
 -spec close (handle()) -> 0 | neg_integer().
 
 %% @doc Opens CAN port given as the system device path. The driver is expected
-%%      to return "raw" binary frames iff `Mode' is `1' or Erlang lists iff `Mode'
-%%      is `1'. Returns device handle (an integer) or negative integer indicating
+%%      to return "raw" binary frames iff `Raw' is `1' or Erlang lists iff `Raw'
+%%      is `1'. Returns device handle (an opaque term) or an integer indicating
 %%      system error.
 
 open (DevicePath, Raw) when is_list(DevicePath),

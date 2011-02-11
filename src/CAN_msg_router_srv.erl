@@ -16,6 +16,7 @@
           handle_info/2,
           terminate/2]).
 
+-include_lib ("eunit/include/eunit.hrl").
 -include ("proto/data_source.hrl").
 
 %%% ==============================================================================
@@ -73,7 +74,10 @@ handle_cast (shutdown, State) ->
 
 handle_info ({timeout, _, tick}, State = #state{timeout = Timeout}) ->
   erlang:send_after(Timeout, self(), tick),
-  {noreply, State}.
+  {noreply, State};
+handle_info ({can, _DevNo, Readings}, State) ->
+  NewState = save_reading(Readings, State),
+  {noreply, NewState}.
 
 terminate (_Reason, State = #state{tid = Tid}) ->
   close_can(State),
@@ -110,3 +114,9 @@ close_can (State = #state{can_dev = undefined}) ->
 close_can (State = #state{can_dev = Dev}) ->
   'CAN':close(Dev),
   State#state{can_dev = undefined}.
+
+save_reading ([], State) ->
+  State;
+save_reading ([R={Id, Timestamp, Data}|Rest], State) ->
+  ?debugFmt("reading: ~p~n", [R]),
+  save_reading(Rest, State).

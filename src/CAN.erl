@@ -152,7 +152,7 @@ open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->
                                     undefined -> 0
                                   end) of
 
-    ErrorNumber when ErrorNumber < 0 -> 
+    ErrorNumber when is_integer(ErrorNumber) and ErrorNumber < 0 -> 
       {error, ErrorNumber};
     C ->
       case set_baudrate(C, BaudRate) of

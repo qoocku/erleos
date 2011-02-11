@@ -21,6 +21,14 @@ tear_down1 (#ctx{srv = S}) ->
   ok = erleos_utils:sync_stop(S),
   meck:unload('CAN').
 
+setup2 () ->
+  'CAN_drv':create_sample_device("can"),
+  {ok, S} = erleos_utils:start('CAN_msg_router_srv', [{args, [{can_path, "can"}]}]),
+  #ctx{srv = S}.
+
+tear_down2 (#ctx{srv = S}) ->
+  ok = erleos_utils:sync_stop(S).
+
 '(1) API: user may define list of id ranges with targets as pids or names' (#ctx{srv = S}) ->
   List      = [{{1, 6}, tgt1},
                {{7, 10}, self()}],
@@ -36,6 +44,11 @@ tear_down1 (#ctx{srv = S}) ->
                {[2], tgt2}],
   ?assertEqual(ok, erleos_ds:subscribe(S, List)).
 
+'(2) Reading: an example' (#ctx{srv = S}) ->
+  List      = [{[1, 4, 5], self()},
+               {[2], tgt2}],
+  ?assertEqual(ok, erleos_ds:subscribe(S, List)).
+
 %% -----------------------------------------------------------------------------
 %% @doc Tests Runner.
 %% @end
@@ -43,6 +56,9 @@ tear_down1 (#ctx{srv = S}) ->
 
 '1_test_' () ->
   tests_runner:run(fun setup1/0, fun tear_down1/1, "(1)", ?MODULE).
+
+'2_test_' () ->
+  tests_runner:run(fun setup2/0, fun tear_down2/1, "(2)", ?MODULE).
 
 %%% ==================================================
 
