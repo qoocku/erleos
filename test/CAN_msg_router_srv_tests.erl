@@ -13,20 +13,27 @@
 -record (ctx, {srv}).
 
 setup1 () ->
-  {ok, S} = erleos_utils:start('CAN_msg_router_srv', []),
+  create_fake_CAN_driver(),
+  {ok, S} = erleos_utils:start('CAN_msg_router_srv', [{args, [{can_path, "/dev/can0"}]}]),
   #ctx{srv = S}.
 
 tear_down1 (#ctx{srv = S}) ->
-  erleos_utils:stop(S).
+  ok = erleos_utils:sync_stop(S),
+  meck:unload('CAN').
 
 '(1) API: user may define list of id ranges with targets as pids or names' (#ctx{srv = S}) ->
   List      = [{{1, 6}, tgt1},
                {{7, 10}, self()}],
   ?assertEqual(ok, erleos_ds:subscribe(S, List)).
 
-'(1) API: user may define list of ida with targets as pids or names' (#ctx{srv = S}) ->
+'(1) API: user may define list of standalone ids with targets as pids or names' (#ctx{srv = S}) ->
   List      = [{1, self()},
                {2, tgt2}],
+  ?assertEqual(ok, erleos_ds:subscribe(S, List)).
+
+'(1) API: user may define list of ids list with targets as pids or names' (#ctx{srv = S}) ->
+  List      = [{[1, 4, 5], self()},
+               {[2], tgt2}],
   ?assertEqual(ok, erleos_ds:subscribe(S, List)).
 
 %% -----------------------------------------------------------------------------
@@ -37,3 +44,14 @@ tear_down1 (#ctx{srv = S}) ->
 '1_test_' () ->
   tests_runner:run(fun setup1/0, fun tear_down1/1, "(1)", ?MODULE).
 
+%%% ==================================================
+
+create_fake_CAN_driver () ->
+  meck:new('CAN'),
+  lists:foreach(fun ({N, F}) -> meck:expect('CAN', N, F) end,
+                [
+                 {open, fun (_Path, _Opts) ->
+                              {ok, fake_can} 
+                        end},
+                 {close, fun (_Dev) -> ok end}
+                ]).
