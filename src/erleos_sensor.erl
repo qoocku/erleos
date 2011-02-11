@@ -36,7 +36,7 @@
 -spec get_last_reading (server_ref()) -> {ok, reading()}. 
 
 get_last_reading (Sensor) ->
-  gen_server:call(Sensor, get_last_reading).
+  gen_server:call(Sensor, #get_last_reading{}).
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

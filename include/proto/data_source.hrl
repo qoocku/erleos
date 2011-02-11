@@ -10,10 +10,13 @@
 -type receiver()  :: pid() | atom() | {node(), atom()}.
 -type receivers() :: [receiver()].
 
+-type accept_fun() :: fun ((any()) -> boolean()).
+
 %% @type ds_subscribe() = #ds_subscribe{ds  = data_source(),
 %%                                      tf  = transform_fun(),
 %%                                      rcv = [pid() | atom() | {node(), atom()}]}. Subscribe message.
 -record (ds_subscribe,{ds  :: data_source(),
+					   af  :: accept_fun(),
                        tf  :: transform_fun(),
                        rcv :: receivers()}).
 -type ds_subscribe() :: #ds_subscribe{}.

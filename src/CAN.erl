@@ -70,7 +70,7 @@ open (DevicePath, Options) when is_list(DevicePath),
                                  Other3 > 0 ->
                  Other3
              end,
-  DefTout  = case application:get_env(can_read_chunk_size) of
+  DefTout  = case application:get_env(can_timeout) of
                undefined ->
                  2500000; % 2.5 ms = 2.5*10^6 ns
                {ok, Other4} when is_integer(Other4),
@@ -83,7 +83,10 @@ open (DevicePath, Options) when is_list(DevicePath),
   Receiver = proplists:get_value(active, Options, undefined),
   Chunks   = get_option(chunk_size, Options, DefChunk),
   Timeout  = get_option(timeout, Options, DefTout),
-  open_can(DevicePath, Receiver, BaudRate, Mask, Raw, Chunks, Timeout).
+  case open_can(DevicePath, Receiver, BaudRate, Mask, Raw, Chunks, Timeout) of
+	{error, N} -> {error, 'CAN_drv':translate_errno(N)};
+	Other      -> Other
+  end.
 
 -spec send (handle(), [{pos_integer(), binary()}]) ->
          {ok, {non_neg_integer(), non_neg_integer()}} | {error, term()}.
@@ -152,7 +155,7 @@ open_can (DevicePath, Pid, BaudRate, Mask, Raw, ChunkSize, Timeout) ->
                                     undefined -> 0
                                   end) of
 
-    ErrorNumber when is_integer(ErrorNumber) and ErrorNumber < 0 -> 
+    ErrorNumber when is_integer(ErrorNumber), ErrorNumber =/= 0 -> 
       {error, ErrorNumber};
     C ->
       case set_baudrate(C, BaudRate) of

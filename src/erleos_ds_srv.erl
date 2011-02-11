@@ -76,6 +76,8 @@
 %% @end
 %% ---------------------------------------------------------------------------
 
+-record (rcv_def, {af, tf}).
+
 init ([Name, ModsDef]) when is_atom(Name), is_list(ModsDef) ->
   Tbl = case ets:info(Name) of
           undefined -> ets:new(Name, [named_table]);
@@ -94,7 +96,7 @@ init ([Name, ModsDef]) when is_atom(Name), is_list(ModsDef) ->
 %% @end
 %% ---------------------------------------------------------------------------
 
-handle_call (#ds_subscribe{ds = Ds, tf = Tf, rcv = Rcv},
+handle_call (#ds_subscribe{ds = Ds, af = Af, tf = Tf, rcv = Rcv},
              _From, State = #state{tbl = T}) ->
   case ets:lookup(T, {source, Ds}) of
     [{{source, Ds}, _}] ->
@@ -102,7 +104,7 @@ handle_call (#ds_subscribe{ds = Ds, tf = Tf, rcv = Rcv},
                     [{Ds, Rs}] -> Rs;
                     []         -> []
                   end,
-      ets:insert(T, {Ds, [{Rcv, Tf} | Receivers]}),
+      ets:insert(T, {Ds, [{Rcv, Af, Tf} | Receivers]}),
       {reply, ok, State};
     [] ->
       {reply, {error, undefined}, State}

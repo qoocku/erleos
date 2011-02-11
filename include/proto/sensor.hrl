@@ -7,10 +7,13 @@
 -type sensor_id()       :: any().              
 -type sensor_reading(T) :: [T].                
 
+-record (get_last_reading, {}).
 -record (reading, {sid   :: sensor_id(),
                    ts    :: ts(),
                    value :: sensor_reading(any())}).
--type reading () :: #reading{}.
+
+-type reading          () :: #reading{}.
+-type get_last_reading () :: #get_last_reading{}.
 
 -type distance()         :: non_neg_integer().
 -type orientation()      :: non_neg_integer(). 

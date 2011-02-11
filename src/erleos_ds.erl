@@ -50,10 +50,13 @@ behavior_info (_) ->
 -spec subscribe (server_ref(), data_source(), transform_fun(), receivers()) -> ok | {error, undefined}.
 
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
-%% @equiv subscribe(Server, DataSource, fun (X) -> X end)
+%% @equiv subscribe(Server, DataSource, fun (_) -> true end, fun (X) -> X end)
 
 subscribe (Server, DataSource) ->
-  subscribe(Server, DataSource, fun (X) -> X end).
+  subscribe(Server,
+			DataSource,
+			fun (_) -> true end,
+			fun (X) -> X end).
 
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
 %%      The data will be (on server side) transformed using supplied by the

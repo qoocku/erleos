@@ -28,7 +28,14 @@ tear_down (#ctx{servers = Servers,
   ?assertEqual(ok, erleos_ds:subscribe(S, ds)).
 
 'test subscribe with a transfer function' (#ctx{servers = [S]}) ->
-  ?assertEqual(ok, erleos_ds:subscribe(S, ds, fun (X) -> X end)).
+  ?assertEqual(ok, erleos_ds:subscribe(S, ds,
+									   fun (_) -> true end, 
+									   fun (X) -> X end)).
+
+'test subscribe with an acceptance function' (#ctx{servers = [S]}) ->
+  ?assertEqual(ok, erleos_ds:subscribe(S, ds,
+									   fun (_) -> true end, 
+									   fun (X) -> X end)).
 
 'test simplest unsubscribe' (#ctx{servers = [S]}) ->
   ?assertEqual(ok, erleos_ds:unsubscribe(S, ds)).
