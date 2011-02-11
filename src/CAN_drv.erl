@@ -186,5 +186,7 @@ create_sample_device (Path) ->
   {ok, F} = file:open(Path, [write]),
   ok      = file:close(F),
   C = open(Path, 0),
-  {_, _} = send(C, [{I, list_to_binary(lists:seq(0, I rem 8))} || I <- lists:seq(0, 255)]),
+  lists:foreach(fun (_) ->
+                  {_, _} = send(C, [{I, list_to_binary(lists:seq(0, I rem 8))} || I <- lists:seq(0, 255)])
+                end, lists:seq(1, 10)),
   close(C).

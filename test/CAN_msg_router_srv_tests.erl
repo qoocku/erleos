@@ -45,8 +45,8 @@ tear_down2 (#ctx{srv = S}) ->
 
 
 '(1) API: user may define list of ids list with targets as pids or names' (#ctx{srv = S}) ->
-  List      = [{[1, 4, 5], [self()]},
-               {[2], [tgt2]}],
+  List      = [{{1, 5}, [self()]},
+               {{6, 11}, [tgt3]}],
   lists:foreach(fun ({Ds, Tgt}) ->
                   ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
                 end, List).
@@ -54,10 +54,27 @@ tear_down2 (#ctx{srv = S}) ->
 
 '(2) Reading: an example' (#ctx{srv = S}) ->
   List      = [{[1, 4, 5], [self()]},
-               {[2], [tgt2]}],
+               {{11, 23}, [tgt2]}],
   lists:foreach(fun ({Ds, Tgt}) ->
                   ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
                 end, List).
+
+'(2) Reading and sending: an example' (#ctx{srv = S} = Ctx) ->
+  Self = self(),
+  Pid  = spawn(fun () ->
+                 receive
+                   Lst -> Self ! {data, Lst}
+                 end
+               end),  
+  ?assertEqual(ok, erleos_ds:subscribe(S, {1, 6}, [Pid])),
+  ?assert(receive
+            {data, Data} ->
+              lists:foldl(fun (Id, true) ->
+                            lists:keymember(Id, 1, Data)
+                          end, true, lists:seq(1, 6))                
+           after 500 -> 
+              false 
+           end).
 
 %% -----------------------------------------------------------------------------
 %% @doc Tests Runner.

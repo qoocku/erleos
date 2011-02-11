@@ -17,6 +17,7 @@
           terminate/2]).
 
 -include_lib ("eunit/include/eunit.hrl").
+-include_lib ("stdlib/include/qlc.hrl").
 -include ("proto/data_source.hrl").
 
 %%% ==============================================================================
@@ -57,14 +58,14 @@ init (PropList) ->
   TabName = proplists:get_value(tabname, PropList, DefTabName),
   Timeout = proplists:get_value(timeout, PropList, DefTimeout),
   CanOpts = proplists:get_value(dev_opts, PropList, DefCanOpts),
-  Tid     = ets:new(TabName, []),
-  RTid    = ets:new(list_to_atom("R_" ++ atom_to_list(TabName)), []),
+  Tid     = ets:new(TabName, [set]),
+  RTid    = ets:new(list_to_atom("R_" ++ atom_to_list(TabName)), [set]),
   {ok, C} = open_can(CanPath, CanOpts),
   erlang:send_after(Timeout, self(), tick),
   {ok, #state{tid = Tid, rtid = RTid, timeout = Timeout, can_dev = C}}.
 
 handle_call (shutdown, From, State) ->
-  NewState = close_can(State),
+  NewState = do_terminate(State),
   gen_server:reply(From, ok),
   {stop, normal, NewState};
 handle_call (#ds_subscribe{ds = DSList, rcv = Receivers}, _From, State) ->
@@ -74,16 +75,17 @@ handle_call (#ds_subscribe{ds = DSList, rcv = Receivers}, _From, State) ->
 handle_cast (shutdown, State) ->
   {stop, normal, State}.
 
-handle_info ({timeout, _, tick}, State = #state{timeout = Timeout}) ->
+handle_info (tick, State = #state{timeout = Timeout, rtid = RTid}) ->
+  Q = qlc:q([Rcv ! Data || {Rcv, Data} <- ets:table(RTid)]),
+  qlc:e(Q),
   erlang:send_after(Timeout, self(), tick),
   {noreply, State};
 handle_info ({can, _DevNo, Readings}, State) ->
   NewState = save_reading(Readings, State),
   {noreply, NewState}.
 
-terminate (_Reason, State = #state{tid = Tid}) ->
-  close_can(State),
-  ets:delete(Tid).
+terminate (_Reason, State) ->
+  do_terminate(State).
 
 %%% ===============================================================================
 
@@ -131,10 +133,15 @@ save_reading ([R={Id, Timestamp, Data}|Rest], State = #state{tid = Tid, rtid = R
                        Others -> Others
                      end,
   lists:foreach(fun (Tgt) ->
-                  [{Tgt, Readings}] = case ets:lookup(RTid, Tgt) of
-                                        []    -> [{Tgt, []}];
-                                        Other -> Other
-                                      end,
-                  true              = ets:insert(RTid, {Tgt, [R|Readings]})
+                  [{Tgt, Readings}] = ets:lookup(RTid, Tgt),
+                  true              = ets:update_element(RTid, Tgt, {2, [R|Readings]})
                 end, Targets),
   save_reading(Rest, State).
+
+do_terminate (State = #state{tid = Tid, rtid = RTid}) ->
+  NS = close_can(State),
+  lists:foreach(fun 
+                  (undefined) -> ok ;
+                  (T)         -> ets:delete(T)
+                end, [RTid, Tid]),
+  NS#state{tid = undefined, rtid = undefined}.
