@@ -36,7 +36,8 @@
           start_link/1,
           start_link/2,
           stop/1,
-          sync_stop/1]).
+          sync_stop/1,
+          get_arg/1]).
 
 %%% ==========================================================================
 %%% E x p o r t e d  I n t e rn a l  F u n c t i o n s
@@ -101,6 +102,11 @@ stop (Server) ->
 
 sync_stop (Server) ->
   gen_server:call(Server, shutdown).
+
+-spec get_arg (atom()) -> {ok, any()} | undefined.
+
+get_arg (Key) ->
+  application:get_env(erleos, Key).
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s
