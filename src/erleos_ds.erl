@@ -55,7 +55,6 @@ behavior_info (_) ->
 subscribe (Server, DataSource) ->
   subscribe(Server,
 			DataSource,
-			fun (_) -> true end,
 			fun (X) -> X end).
 
 %% @doc Subscribes for data of `DataSource' type on data source `Server'.
@@ -82,9 +81,9 @@ subscribe (Server, DataSource, TransferFun, Receivers)
 %% @doc Unsubscribes for data of `DataSource' type on data source `Server'.
 
 -spec unsubscribe (server_ref(), data_source()) -> ok | {error, undefined}.
--spec unsubscribe (server_ref(), data_source(), receivers()) -> ok | {error, undefined}.
+-spec unsubscribe (server_ref(), data_source(), receiver()) -> ok | {error, undefined}.
 
-unsubscribe (Server, DataSource) when  is_pid(Server) ; is_atom(Server) ; is_tuple(Server) ->
+unsubscribe (Server, DataSource) when  is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server) ->
   unsubscribe (Server, DataSource, self()).
 
 unsubscribe (Server, DataSource, Receiver)

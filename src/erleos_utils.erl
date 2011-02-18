@@ -37,13 +37,16 @@
           start_link/2,
           stop/1,
           sync_stop/1,
-          get_arg/1]).
+          get_arg/1,
+          get_arg/2,
+          get_arg/3]).
 
 %%% ==========================================================================
 %%% E x p o r t e d  I n t e rn a l  F u n c t i o n s
 %%% ==========================================================================
 
 -export ([]).
+-export_types ([server_ref/0]).
 
 %%% ==========================================================================
 %%% A P I  F u n c ti o n s
@@ -103,10 +106,32 @@ stop (Server) ->
 sync_stop (Server) ->
   gen_server:call(Server, shutdown).
 
--spec get_arg (atom()) -> {ok, any()} | undefined.
+-type get_arg_result () :: {ok, any()} | undefined.
+-type args() :: [{atom(), any()}].
+
+-spec get_arg (atom()) -> get_arg_result().
+-spec get_arg (atom(), args() | term()) -> get_arg_result().
+-spec get_arg (atom(), args(), term()) -> get_arg_result().         
 
 get_arg (Key) ->
   application:get_env(erleos, Key).
+
+get_arg (Key, Args) when is_list(Args) ->
+  case proplists:get_value(Key, Args) of
+    undefined -> get_arg(Key);
+    Other     -> Other
+  end;
+get_arg (Key, Def) ->
+  case get_arg(Key) of
+    undefined -> {ok, Def};
+    Other     -> Other
+  end.
+
+get_arg (Key, Args, Def) ->
+  case get_arg(Key, Args) of
+    undefined -> {ok, Def};
+    Other     -> Other
+  end.
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s
