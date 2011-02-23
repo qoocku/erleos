@@ -17,7 +17,8 @@
 -include ("proto/sensor.hrl").
 -include ("proto/usir.hrl").
 
--type readings () :: [reading()].
+-type readings    () :: [reading()].
+-type can_readings() :: [can_reading()].
 -record (state, {can_ds       = undefined :: {atom() | pid() | {node(), atom()}, {can, string()}},
                  address_base = 0         :: integer(),
 				         last_reading = []        :: readings(),
@@ -29,19 +30,21 @@
 -type call()     :: #get_last_reading{}.
 -type reply()    :: readings().
 -type cast()     :: shutdown.
--type canData()  :: {integer(), integer(), binary()}.
--type info()     :: [canData()].
+-type info()     :: [can_reading()].
 
 -spec init (initArgs()) -> {ok, state()}.
 -spec handle_call (call(), any(), state()) -> {reply, reply(), state()}.
 -spec handle_cast (cast(), state()) -> {stop, normal, state()}.
 -spec handle_info (info(), state()) -> {noreply, state()}.
+-spec terminate (shutdown, state()) -> any().
+-spec code_change (any(), state(), any()) -> {ok, state()}.
 
 init (Options) when is_list(Options) ->
   {ok, CANds} = erleos_utils:get_arg(usir_can_ds, Options, {can_ds, {can, "/dev/can0"}}),
   {ok, Type}  = erleos_utils:get_arg(type, Options),
   ok          = subscribe_to_ds(CANds),
-  {ok, #state{can_ds = CANds, type = Type}}.
+  {ok, open_queues(#state{can_ds = CANds,
+                          type   = Type})}.
 
 handle_call (#get_last_reading{}, _From, State) ->
   {reply, State#state.last_reading, State}.
@@ -50,9 +53,9 @@ handle_cast (shutdown, State) ->
   {stop, normal, State}.
 
 handle_info (Data, State) when is_list(Data) ->
-  Readings = process_data(Data, [], State),
-  spawn(fun () -> emit_data(Readings, State) end),
-  {noreply, State#state{last_reading = Readings}}.
+  {Raw, Erl} = process_data(Data, {[], []}, State),
+  spawn(fun () -> emit_data(Raw, State) end),
+  {noreply, State#state{last_reading = Erl}}.
 
 terminate (shutdown, State = #state{can_ds = Ds}) ->
   unsubscribe_from_ds(Ds),
@@ -91,20 +94,38 @@ subscribe_to_ds ({CANSrv, {can, N}}) ->
 unsubscribe_from_ds ({CANSrv, {can, N}}) ->
   erleos_ds:unsubscribe(CANSrv, {can, N}).
 
--spec process_data (readings(), [#raw_data{}], state()) -> [#raw_data{}]. 
+-spec process_data (can_readings(), {[#raw_data{}], readings()}, state()) -> {[#raw_data{}], readings()}. 
 
 process_data ([], Acc, _) ->
   Acc;
-process_data ([{Id, Timestamp, Data} | Rest], Acc, State = #state{address_base = AB, type = Type}) ->
+process_data ([{Id, Timestamp, Data} | Rest],
+              {Acc1, Acc2},
+              State = #state{address_base = AB, type = Type}) ->
   X                  = (Id rem AB),
   <<V:16/little, C>> = Data,
-  Data2              = if
-                       X == 1 andalso Type =:= us -> % US reading
-                         #raw_data{type = Type, value = V, cycle = C, time = Timestamp, id = Id};
-                       X > 1 andalso X < 7 andalso Type =:= ir -> % IR reading
-                         #raw_data{type = Type, value = V, cycle = C, time = Timestamp, id = Id}
-                     end,
-  process_data(Rest, [Data2 | Acc], State).
+  {Data1, Data2}     = if
+                         X == 1 andalso Type =:= us -> % US reading
+                           {#raw_data{type  = Type,
+                                      value = V,
+                                      cycle = C,
+                                      time  = ?can_ts_to_ms(Timestamp),
+                                      id    = Id},
+                            #reading{sid   = Id,
+                                     ts    = ?can_ts_to_now(Timestamp),
+                                     value = V}}; % TODO: Convert the US value and Timestamp to now()
+                         X > 1 andalso X < 7 andalso Type =:= ir -> % IR reading
+                           {#raw_data{type  = Type,
+                                      value = V,
+                                      cycle = C,
+                                      time  = ?can_ts_to_ms(Timestamp),
+                                      id    = Id},
+                            #reading{sid   = Id,
+                                     ts    = ?can_ts_to_now(Timestamp),
+                                     value = V}} % TODO: Convert the IR value and Timestamp to now()
+                       end,
+  process_data(Rest,
+               {[Data1 | Acc1], [Data2 | Acc2]},
+               State).
 
 -spec emit_data ([#raw_data{}], state()) -> any().
 

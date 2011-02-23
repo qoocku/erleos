@@ -494,7 +494,7 @@
 <macros>
 <stringMacro name="ERL_ERTS_VER" type="VALUE_TEXT" value="5.8.1"/>
 <stringMacro name="ERL_ERTS_PATH" type="VALUE_TEXT" value="${ERL_ROOT}/erts-${ERL_ERTS_VER}/include"/>
-<stringMacro name="LINCAN_HEADERS_PATH" type="VALUE_TEXT" value="/home/robot/software/drivers/lincan-0.3.4/include"/>
+<stringMacro name="LINCAN_HEADERS_PATH" type="VALUE_TEXT" value="${HOME}/src/lincan-0.3.4/include"/>
 <stringMacro name="ERL_ROOT" type="VALUE_TEXT" value="/usr/local/lib/erlang"/>
 </macros>
 <externalSettings>

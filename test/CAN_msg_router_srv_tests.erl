@@ -52,7 +52,7 @@ tear_down2 (#ctx{srv = S}) ->
                 end, List).
 
 
-'(2) Reading: an example' (#ctx{srv = S}) ->
+'(1) Reading: an example' (#ctx{srv = S}) ->
   List      = [{[1, 4, 5], [self()]},
                {{11, 23}, [tgt2]}],
   lists:foreach(fun ({Ds, Tgt}) ->

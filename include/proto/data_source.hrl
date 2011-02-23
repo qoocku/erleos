@@ -16,7 +16,7 @@
 %%                                      tf  = transform_fun(),
 %%                                      rcv = [pid() | atom() | {node(), atom()}]}. Subscribe message.
 -record (ds_subscribe,{ds  :: data_source(),
-					   af  :: accept_fun(),
+					             af  :: accept_fun(),
                        tf  :: transform_fun(),
                        rcv :: receivers()}).
 -type ds_subscribe() :: #ds_subscribe{}.

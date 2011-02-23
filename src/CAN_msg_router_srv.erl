@@ -76,11 +76,12 @@ handle_cast (shutdown, State) ->
   {stop, normal, State}.
 
 handle_info (tick, State = #state{timeout = Timeout, rtid = RTid}) ->
-  Q = qlc:q([Rcv ! Data || {Rcv, Data} <- ets:table(RTid)]),
+  Q = qlc:q([Rcv ! Data || R = {Id, _, _} <- ets:table(RTid)]),
   qlc:e(Q),
+  ets:delete_all_objects(RTid),
   erlang:send_after(Timeout, self(), tick),
   {noreply, State};
-handle_info ({can, _DevNo, Readings}, State) ->
+handle_info ({can, _DevPath, Readings}, State) ->
   NewState = save_reading(Readings, State),
   {noreply, NewState}.
 
@@ -127,15 +128,8 @@ close_can (State = #state{can_dev = Dev}) ->
 
 save_reading ([], State) ->
   State;
-save_reading ([R={Id, Timestamp, Data}|Rest], State = #state{tid = Tid, rtid = RTid}) ->
-  [{Id, Targets}]  = case ets:lookup(Tid, Id) of
-                       []     -> [{Id, []}];
-                       Others -> Others
-                     end,
-  lists:foreach(fun (Tgt) ->
-                  [{Tgt, Readings}] = ets:lookup(RTid, Tgt),
-                  true              = ets:update_element(RTid, Tgt, {2, [R|Readings]})
-                end, Targets),
+save_reading ([R={Id, Timestamp, Data}|Rest], State = #state{rtid = RTid}) ->
+  ets:insert(RTid, R),
   save_reading(Rest, State).
 
 do_terminate (State = #state{tid = Tid, rtid = RTid}) ->

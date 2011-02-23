@@ -27,6 +27,8 @@ struct _CAN_Handle {
   int       device;
   ErlNifPid receiver;
   ErlNifTid tid;
+  char*    devpath;
+  ERL_NIF_TERM devpath_bin;
   int       threaded;
   unsigned  chunk_size;
   long      timeout;
@@ -110,7 +112,11 @@ _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   handle->threaded = 0;
   if (handle->device >= 0)
     {
+      int len = strlen(dev_path);
       result = enif_make_resource(env, handle);
+      handle->devpath = enif_alloc(len);
+      memcpy(handle->devpath, dev_path, len);
+      handle->devpath_bin = enif_make_resource_binary(env, handle, handle->devpath, len);
     }
   else
     {
@@ -131,7 +137,7 @@ _reading_thread (void* arg)
 {
   CAN_handle* handle  = arg;
   ErlNifEnv*  env     = enif_alloc_env();
-  ERL_NIF_TERM device =   enif_make_int(env, handle->device);
+  //ERL_NIF_TERM device =   enif_make_int(env, handle->device);
   handle->threaded = 1;
   while (handle->threaded)
     {
@@ -139,7 +145,7 @@ _reading_thread (void* arg)
       ERL_NIF_TERM msg = _receive_can_messages(env, handle, handle->chunk_size, handle->timeout);
       if (!enif_get_int(env, msg, &status))
         {
-          enif_send(env, &handle->receiver, env, enif_make_tuple3(env, can_atom, device, msg));
+          enif_send(env, &handle->receiver, env, enif_make_tuple3(env, can_atom, handle->devpath_bin, msg));
           enif_clear_env(env);
         }
       else if (status == 0)
@@ -409,7 +415,13 @@ _close (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
       handle->threaded = 0;
       enif_thread_join(handle->tid, &dont_care);
     }
-  result = enif_make_int(env, close(handle->device));
+  result = enif_make_int(env, handle->device >= 0 ? close(handle->device) : 0);
+  handle->device = -1;
+  if (handle->devpath)
+    {
+      enif_free(handle->devpath);
+      handle->devpath = NULL;
+    }
   return result;
 }
 
