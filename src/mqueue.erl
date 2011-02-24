@@ -11,7 +11,7 @@
 %%% I n c l u d e d  F i l e s
 %%% ==========================================================================
 
-%%%-include_lib ().
+-include_lib ("eunit/include/eunit.hrl").
 -include ("proto/mqueue.hrl").
 
 %%% ==========================================================================
@@ -63,16 +63,19 @@ parse_options (Options) ->
                  _               -> 256
                end,
   Rest       = lists:filter(fun
-                             (ValidOpt) when is_tuple(ValidOpt) ;
-                                              ValidOpt =:= own ; 
+                             (ValidOpt) when ValidOpt =:= own ; 
                                               ValidOpt =:= noblock ->
                                 true;
                              ({active, Pid}) when is_pid(Pid) ->
                                 true;
+                             ({size, I1}) when is_integer(I1) ->
+                                false;
+                             ({msgsize, I2}) when is_integer(I2) ->
+                                false;                              
                              (Opt) ->
                                 exit({badarg, Opt})
                             end, Options),
-  {QueueSize, MaxMsgSize, Rest}.
+  {QueueSize, MaxMsgSize, ?debugVal(Rest)}.
 
 -spec open (string()) -> {ok, mq()}.
 -spec open (string(), mqueue_options()) -> {ok, mq()}.
@@ -86,7 +89,7 @@ open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
              {active, Pid} -> Pid;
              Other         -> Other
            end || Opt <- Rest],
-  case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, Rest2) of
+  case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, ?debugVal(Rest2)) of
       {ok, Q} -> {ok, #mq{hnd = Q}};
       Other   -> Other
   end.

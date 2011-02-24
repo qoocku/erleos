@@ -95,7 +95,7 @@ open_queues (State) ->
                                          end),
   Queues          = proplists:get_value(output, proplists:get_value(mqueues, SensorCfg)),
   State#state{queues = [begin 
-                          {ok, Q} = mqueue:open(Name, [noblock]),
+                          {ok, Q} = mqueue:open(Name, [{size, 256}, noblock]),
                           Q
                         end || Name <- Queues]}.
   
@@ -147,18 +147,21 @@ process_data ([{Id, Timestamp, Data} | Rest],
 -spec emit_data ([#raw_data{}], state()) -> any().
 
 emit_data (Readings, State = #state{type = Type}) ->
-  lists:foreach(fun (#raw_data{id   = Id,
+  NS = lists:foldl(fun (#raw_data{id   = Id,
                                type  = RType,
                                time  = Time,
                                value = Value,
-                               cycle = Cycle}) when RType =:= Type ->
+                               cycle = Cycle}, NotSent) when RType =:= Type ->
                   Packet = <<Id:16/little, Time:32/little, Value:16/little, Cycle>>,
                   case write_queues(Packet, State) of
-                    [] -> ok;
-                    Lst -> error_logger:error_report([{mqueue, not_sent},
-                                                      {packet, Packet}, Lst])
+                    []    -> NotSent;
+                    Other -> [{Packet, Other} | NotSent] 
                   end
-                end, Readings).
+                end, [], Readings),
+  case NS of
+    [] -> ok;
+    Lst -> error_logger:error_report([{mqueue, not_sent}, {count, length(Lst)}, {packets, Lst}])
+  end.
 
 -spec write_queues (binary(), state()) -> any().
 

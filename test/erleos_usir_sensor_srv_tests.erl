@@ -34,7 +34,7 @@ ir_tear_down (#ctx{can_ctx = Ctx, this = S}) ->
   Msgs = generate_usir_can_messages(16),
   R ! {can, atom_to_list(R), Msgs},
   timer:sleep(99),
-  ?debugVal(erleos_sensor:get_last_reading(S)),
+  ?debugVal(length(erleos_sensor:get_last_reading(S))),
   ok.
 
 ir_test_ () ->
