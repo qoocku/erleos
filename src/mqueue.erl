@@ -66,6 +66,8 @@ parse_options (Options) ->
                              (ValidOpt) when is_tuple(ValidOpt) ;
                                               ValidOpt =:= own ->
                                 true;
+                             ({active, Pid}) when is_pid(Pid) ->
+                                true;
                              (Opt) ->
                                 exit({badarg, Opt})
                             end, Options),
