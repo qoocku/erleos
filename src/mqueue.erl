@@ -49,9 +49,9 @@
 -opaque mq ()          :: #mq{}.
 -type mqueue_options() :: [{size, pos_integer()}   |
                            {msgsize, pos_integer()}|
-                           {active, pid()} | own].
+                           {active, pid()} | own | noblock].
     
--spec parse_options (mqueue_options()) -> {pos_integer(), pos_integer(), []|[noblock|own]}.
+-spec parse_options (mqueue_options()) -> {pos_integer(), pos_integer(), []|[noblock|own|{active, pid()}]}.
 
 parse_options (Options) ->
   QueueSize  = case lists:keyfind(size, 1, Options) of
@@ -64,7 +64,8 @@ parse_options (Options) ->
                end,
   Rest       = lists:filter(fun
                              (ValidOpt) when is_tuple(ValidOpt) ;
-                                              ValidOpt =:= own ->
+                                              ValidOpt =:= own ; 
+                                              ValidOpt =:= noblock ->
                                 true;
                              ({active, Pid}) when is_pid(Pid) ->
                                 true;

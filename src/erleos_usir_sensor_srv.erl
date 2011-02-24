@@ -29,7 +29,7 @@
 -type state()    :: #state{}.
 -type initArg()  :: {usir_can_ds, any()} | {type, ir | us}. 
 -type initArgs() :: [initArg()].
--type call()     :: #get_last_reading{}.
+-type call()     :: #get_last_reading{} | shutdown.
 -type reply()    :: readings().
 -type cast()     :: shutdown.
 -type info()     :: [can_reading()].
@@ -57,6 +57,9 @@ init (Options) when is_list(Options) ->
                           ids    = Ids,
                           type   = Type})}.
 
+handle_call (shutdown, From, State) ->
+  gen_server:reply(From, ok),
+  {stop, normal, State};
 handle_call (#get_last_reading{}, _From, State) ->
   {reply, State#state.last_reading, State}.
 
@@ -69,7 +72,7 @@ handle_info (#ds_data{readings = Data}, State) ->
   spawn(fun () -> emit_data(Raw, State) end),
   {noreply, State#state{last_reading = Erl}}.
 
-terminate (shutdown, State = #state{can_ds = Ds, ids = Ids}) ->
+terminate (_Reason, State = #state{can_ds = Ds, ids = Ids}) ->
   unsubscribe_from_ds(Ds, Ids),
   close_queues(State).
 
@@ -91,7 +94,10 @@ open_queues (State) ->
                                            us -> us_sensor
                                          end),
   Queues          = proplists:get_value(output, proplists:get_value(mqueues, SensorCfg)),
-  State#state{queues = [mqueue:open(Q) || Q <- Queues]}.
+  State#state{queues = [begin 
+                          {ok, Q} = mqueue:open(Name, [noblock]),
+                          Q
+                        end || Name <- Queues]}.
   
 close_queues (State) ->
   [mqueue:close(Q) || Q <- State#state.queues],
@@ -147,11 +153,18 @@ emit_data (Readings, State = #state{type = Type}) ->
                                value = Value,
                                cycle = Cycle}) when RType =:= Type ->
                   Packet = <<Id:16/little, Time:32/little, Value:16/little, Cycle>>,
-                  write_queues(Packet, State)
+                  case write_queues(Packet, State) of
+                    [] -> ok;
+                    Lst -> error_logger:error_report([{mqueue, not_sent},
+                                                      {packet, Packet}, Lst])
+                  end
                 end, Readings).
 
 -spec write_queues (binary(), state()) -> any().
 
 write_queues (Packet, #state{queues = Qs}) ->
-  [mqueue:send(Q, Packet) || Q <- Qs].
+  lists:filter(fun
+                 (ok) -> false;
+                 ({error, _}) -> true
+               end, [mqueue:send(Q, Packet) || Q <- Qs]).
 

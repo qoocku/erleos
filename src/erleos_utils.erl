@@ -119,7 +119,7 @@ get_arg (Key) ->
 get_arg (Key, Args) when is_list(Args) ->
   case proplists:get_value(Key, Args) of
     undefined -> get_arg(Key);
-    Other     -> Other
+    Other     -> {ok, Other}
   end;
 get_arg (Key, Def) ->
   case get_arg(Key) of
