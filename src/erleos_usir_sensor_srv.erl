@@ -14,6 +14,7 @@
 		      terminate/2,
 		      code_change/3]).
 
+-include ("proto/data_source.hrl").
 -include ("proto/sensor.hrl").
 -include ("proto/usir.hrl").
 
@@ -63,7 +64,7 @@ handle_cast (shutdown, State = #state{can_ds = CANSrv, ids = Ids}) ->
   unsubscribe_from_ds(CANSrv, Ids),
   {stop, normal, State}.
 
-handle_info (Data, State) when is_list(Data) ->
+handle_info (#ds_data{readings = Data}, State) ->
   {Raw, Erl} = process_data(Data, {[], []}, State),
   spawn(fun () -> emit_data(Raw, State) end),
   {noreply, State#state{last_reading = Erl}}.
@@ -111,11 +112,10 @@ process_data ([], Acc, _) ->
   Acc;
 process_data ([{Id, Timestamp, Data} | Rest],
               {Acc1, Acc2},
-              State = #state{address_base = AB, type = Type}) ->
-  X                  = (Id rem AB),
+              State = #state{type = Type}) ->
   <<V:16/little, C>> = Data,
-  {Data1, Data2}     = if
-                         X == 1 andalso Type =:= us -> % US reading
+  {Data1, Data2}     = case Type of
+                         us -> % US reading
                            {#raw_data{type  = Type,
                                       value = V,
                                       cycle = C,
@@ -124,7 +124,7 @@ process_data ([{Id, Timestamp, Data} | Rest],
                             #reading{sid   = Id,
                                      ts    = ?can_ts_to_now(Timestamp),
                                      value = V}}; % TODO: Convert the US value and Timestamp to now()
-                         X > 1 andalso X < 7 andalso Type =:= ir -> % IR reading
+                         ir -> % IR reading
                            {#raw_data{type  = Type,
                                       value = V,
                                       cycle = C,
