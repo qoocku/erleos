@@ -81,16 +81,18 @@ subscribe (Server, DataSource, TransferFun, Receivers)
 %% @doc Unsubscribes for data of `DataSource' type on data source `Server'.
 
 -spec unsubscribe (server_ref(), data_source()) -> ok | {error, undefined}.
--spec unsubscribe (server_ref(), data_source(), receiver()) -> ok | {error, undefined}.
+-spec unsubscribe (server_ref(), data_source(), receivers()) -> ok | {error, undefined}.
 
 unsubscribe (Server, DataSource) when  is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server) ->
-  unsubscribe (Server, DataSource, self()).
+  unsubscribe (Server, DataSource, [self()]).
 
-unsubscribe (Server, DataSource, Receiver)
-  when (is_pid(Server) orelse is_atom(Server) orelse is_tuple(Server)),
-        (is_pid(Receiver) orelse is_atom(Receiver) orelse is_tuple(Receiver)) ->
+unsubscribe (Server, DataSource, Receivers)
+  when is_pid(Server)
+        orelse is_atom(Server)
+        orelse is_tuple(Server)
+        orelse is_list(Receivers) ->
   gen_server:call(Server, #ds_unsubscribe{ds  = DataSource,
-                                          rcv = Receiver}).
+                                          rcv = Receivers}).
 
 %%% ==========================================================================
 %%% I n t e r n a l / L o c a l  F u n c t i o n s

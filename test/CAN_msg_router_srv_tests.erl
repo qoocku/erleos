@@ -9,6 +9,7 @@
 
 -compile (export_all).
 -include_lib ("eunit/include/eunit.hrl").
+-include ("proto/data_source.hrl").
 
 -record (ctx, {srv}).
 
@@ -52,12 +53,30 @@ tear_down2 (#ctx{srv = S}) ->
                 end, List).
 
 
+-define (now_to_can_ts(Now), begin {_, B, _} = Now, {B, 0} end). 
+
 '(1) Reading: an example' (#ctx{srv = S}) ->
-  List      = [{[1, 4, 5], [self()]},
-               {{11, 23}, [tgt2]}],
+  List      = [{Ids=lists:seq(1, 256), [self()]}],
   lists:foreach(fun ({Ds, Tgt}) ->
                   ?assertEqual(ok, erleos_ds:subscribe(S, Ds, Tgt))
-                end, List).
+                end, List),
+  Data = [{Id, ?now_to_can_ts(now()), list_to_binary(integer_to_list(100*Id))} || Id <- Ids],
+  % bomb the router with fake CAN signals:
+  S ! {can, <<"fake-can">>, Data},
+  % collect the results
+  ?assertEqual({received, true}, receive
+                                     #ds_data{readings = Readings} ->
+                                       {received, Readings -- Data =:= []}
+                                   after 500 ->
+                                     false
+                                   end).
+
+'(1) Reading: many subscribers' (#ctx{srv = S}) ->
+  test_many_subscribers(S, 16),
+  test_many_subscribers(S, 32),
+  test_many_subscribers(S, 64),
+  test_many_subscribers(S, 128),
+  test_many_subscribers(S, 256).
 
 '(2) Reading and sending: an example' (#ctx{srv = S} = Ctx) ->
   Self = self(),
@@ -98,3 +117,54 @@ create_fake_CAN_driver () ->
                         end},
                  {close, fun (_Dev) -> ok end}
                 ]).
+
+test_many_subscribers (S, N) ->
+  % 16 ids ranges
+  Ranges  = lists:zip(lists:seq(1, 16*N, 16), lists:seq(16, 16*N, 16)),
+  % a subscriber process behavior
+  SubProc = fun (Master, Parent, Range) ->
+              ok = erleos_ds:subscribe(S, Range),
+              Master ! {registered, self()},
+              receive                        
+                R -> Parent ! R,
+                ok = erleos_ds:unsubscribe(S, Range)
+              end
+            end,
+  % fake CAN data
+  Data    = [{Id, ?now_to_can_ts(now()), list_to_binary(integer_to_list(100*Id))} || Id <- lists:seq(1, 16*N)],
+  % ds_data collector process behavior
+  Collect = fun (Parent, Collected, Loop) ->
+              if
+                length(Collected) == 16*N ->
+                  Parent ! (Collected -- Data =:= []);
+                true ->
+                  receive
+                    #ds_data{readings = Readings} ->                  
+                      Loop(Parent, Collected ++ Readings, Loop)
+                  after 1000 ->
+                    Parent ! false
+                  end
+                end
+            end,
+  Self    = self(),
+  % the collector process  
+  Pid     = spawn(fun () -> Collect(Self, [], Collect) end),
+  % 16 subscribers
+  Subscr  = [spawn(fun () -> SubProc(Self, Pid, Range) end) || Range <- Ranges],
+  % wait till all subscribers are registered
+  ?assert(Subscr -- lists:foldl (fun (_, Acc) ->
+                                    receive
+                                      {registered, SubsPid} -> [SubsPid | Acc]
+                                    after 1000 ->
+                                      Acc
+                                    end
+                                  end, [], Subscr) =:= []),
+  % check registered subscribers
+  Registered = lists:sort(gen_server:call(S, registered)),
+  ?assert(lists:foldl(fun ({_, Pids}, Bool) ->
+                         Bool andalso length(Pids) == 1 andalso lists:member(hd(Pids), Subscr)
+                       end, true, Registered)),
+  % bomb the router with fake CAN signals:
+  S ! {can, <<"fake-can">>, Data},
+  % collect the results
+  ?assert(receive Bool -> Bool end).

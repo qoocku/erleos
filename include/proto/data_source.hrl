@@ -16,7 +16,7 @@
 %%                                      tf  = transform_fun(),
 %%                                      rcv = [pid() | atom() | {node(), atom()}]}. Subscribe message.
 -record (ds_subscribe,{ds  :: data_source(),
-					             af  :: accept_fun(),
+                       af  :: accept_fun(),
                        tf  :: transform_fun(),
                        rcv :: receivers()}).
 -type ds_subscribe() :: #ds_subscribe{}.
@@ -24,7 +24,11 @@
 %% @type ds_unsubscribe() = #ds_subscribe{ds  = data_source(),
 %%                                      rcv = [pid() | atom() | {node(), atom()}]}. Unsubscribe message.
 -record (ds_unsubscribe,{ds  :: data_source(),
-                         rcv :: receiver()}).
+                         rcv :: receivers()}).
 -type ds_unsubscribe() :: #ds_unsubscribe{}.
+
+-record (ds_data, {ds            :: pid() | atom(),
+                   readings = [] :: [any()]}).
+-type ds_data() :: #ds_data{}.
 
 -endif.

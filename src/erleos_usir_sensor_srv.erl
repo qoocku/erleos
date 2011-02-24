@@ -19,7 +19,8 @@
 
 -type readings    () :: [reading()].
 -type can_readings() :: [can_reading()].
--record (state, {can_ds       = undefined :: {atom() | pid() | {node(), atom()}, {can, string()}},
+-record (state, {can_ds       = undefined :: atom() | pid() | {node(), atom()},
+                 ids          = []        :: list(),
                  address_base = 0         :: integer(),
 				         last_reading = []        :: readings(),
                  queues       = []        :: [any()],
@@ -40,16 +41,26 @@
 -spec code_change (any(), state(), any()) -> {ok, state()}.
 
 init (Options) when is_list(Options) ->
-  {ok, CANds} = erleos_utils:get_arg(usir_can_ds, Options, {can_ds, {can, "/dev/can0"}}),
-  {ok, Type}  = erleos_utils:get_arg(type, Options),
-  ok          = subscribe_to_ds(CANds),
-  {ok, open_queues(#state{can_ds = CANds,
+  {ok, CANRt}  = erleos_utils:get_arg(usir_can_router, Options),
+  CanDev       = 'CAN_msg_router_srv':server_id(begin 
+                                                  {ok, V} = erleos_utils:get_arg(candev, CANRt),
+                                                  V
+                                                end),         
+  {ok, Type}   = erleos_utils:get_arg(type, Options),
+  {ok, Ids}    = erleos_utils:get_arg(case Type of
+                                        ir -> ir_data_id;
+                                        us -> us_data_id
+                                      end, CANRt),
+  ok           = subscribe_to_ds(CanDev, Ids),
+  {ok, open_queues(#state{can_ds = CanDev,
+                          ids    = Ids,
                           type   = Type})}.
 
 handle_call (#get_last_reading{}, _From, State) ->
   {reply, State#state.last_reading, State}.
 
-handle_cast (shutdown, State) ->
+handle_cast (shutdown, State = #state{can_ds = CANSrv, ids = Ids}) ->
+  unsubscribe_from_ds(CANSrv, Ids),
   {stop, normal, State}.
 
 handle_info (Data, State) when is_list(Data) ->
@@ -57,8 +68,8 @@ handle_info (Data, State) when is_list(Data) ->
   spawn(fun () -> emit_data(Raw, State) end),
   {noreply, State#state{last_reading = Erl}}.
 
-terminate (shutdown, State = #state{can_ds = Ds}) ->
-  unsubscribe_from_ds(Ds),
+terminate (shutdown, State = #state{can_ds = Ds, ids = Ids}) ->
+  unsubscribe_from_ds(Ds, Ids),
   close_queues(State).
 
 code_change (_Vsn, State, _Extra) ->
@@ -85,14 +96,14 @@ close_queues (State) ->
   [mqueue:close(Q) || Q <- State#state.queues],
   State#state{queues = []}.
 
--spec subscribe_to_ds ({erleos_ds:server_ref(), any()}) -> ok | {error, any()}.
--spec unsubscribe_from_ds ({erleos_ds:server_ref(), any()}) -> ok | {error, any()}.
+-spec subscribe_to_ds (erleos_ds:server_ref(), any()) -> ok | {error, any()}.
+-spec unsubscribe_from_ds (erleos_ds:server_ref(), any()) -> ok | {error, any()}.
 
-subscribe_to_ds ({CANSrv, {can, N}}) ->
-  erleos_ds:subscribe(CANSrv, {can, N}).
+subscribe_to_ds (CANSrv, Ids) ->
+  erleos_ds:subscribe(CANSrv, Ids).
 
-unsubscribe_from_ds ({CANSrv, {can, N}}) ->
-  erleos_ds:unsubscribe(CANSrv, {can, N}).
+unsubscribe_from_ds (CANSrv, Ids) ->
+  erleos_ds:unsubscribe(CANSrv, Ids).
 
 -spec process_data (can_readings(), {[#raw_data{}], readings()}, state()) -> {[#raw_data{}], readings()}. 
 

@@ -139,7 +139,7 @@ handle_cast (shutdown, State) ->
 %% ---------------------------------------------------------------------------
 %% @doc Handling all non call/cast messages (typically coming from REAL data sources).
 %%      Used to accept real data from real devices.
-%%      For example `DsType` would be `tcp` and `DsId` would be `{IP, Port}`
+%%      For example `DsType' would be `tcp' and `DsId' would be `{IP, Port}'
 %%      and so on.
 %% @end
 %% ---------------------------------------------------------------------------
