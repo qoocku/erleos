@@ -27,7 +27,7 @@
 
 -define (can_ts_to_now(Ts), begin
                               {S, Us} = Ts,
-                              Secs    = S + Us div 1000
+                              Secs    = S + Us div 1000,
                               {Secs * 1000000, Secs, Secs div 1000000}                             
                             end).
 
