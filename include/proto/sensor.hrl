@@ -4,13 +4,12 @@
 -type ts()              :: {non_neg_integer(), 
                             non_neg_integer(), 
                             non_neg_integer()}.
--type sensor_id()       :: any().              
--type sensor_reading(T) :: [T].                
+-type sensor_id()       :: any().                            
 
 -record (get_last_reading, {}).
 -record (reading, {sid   :: sensor_id(),
                    ts    :: ts(),
-                   value :: sensor_reading(any())}).
+                   value :: any()}).
 
 -type reading          () :: #reading{}.
 -type can_reading      () :: {integer(), {integer(), integer()}, binary()}.

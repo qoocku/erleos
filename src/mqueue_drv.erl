@@ -38,7 +38,7 @@
 -type handle() :: any().
 -type options() :: [pid()|own].
 
--spec open (string(), pos_integer(), pos_integer(), options()) -> {ok, handle()}.
+-spec open (string(), pos_integer(), pos_integer(), options()) -> {ok, handle()} | {error, any()}.
 -spec close (handle()) -> ok.
 -spec recv (handle()) -> {ok, binary()} | {error, term()}.
 -spec send (handle(), binary(), non_neg_integer()) -> ok | {error, term()}.
@@ -48,7 +48,10 @@ open (Name, QueueSize, MaxMsgSize, Options) when is_list(Name),
                                                  QueueSize > 0,
                                                  MaxMsgSize > 0,
                                                  is_list(Options) ->
-  {ok, <<>>}.
+  case Name of
+    "undefined" -> {error, ename};
+    _           -> {ok, <<>>}
+  end.
 
 close (Handle) when Handle =/= undefined ->
   ok.
@@ -63,7 +66,10 @@ send (Handle, Binary, Priority) when Handle =/= undefined,
                                      is_binary(Binary),
                                      is_integer(Priority),
                                      Priority > -1 ->
-  ok.
+  case Binary of
+    <<>> -> {error, ewuldblock};
+    _    -> ok
+  end.
 
 props (Handle) when Handle =/= undefined ->
   {ok, [own]}.

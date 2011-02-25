@@ -33,7 +33,7 @@
 
 %% @doc Gets last recorded scan from given sensor.
 
--spec get_last_reading (server_ref()) -> {ok, reading()}. 
+-spec get_last_reading (server_ref()) -> [reading()] | timeout. 
 
 get_last_reading (Sensor) ->
   gen_server:call(Sensor, #get_last_reading{}).

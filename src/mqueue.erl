@@ -49,19 +49,25 @@
 -opaque mq ()          :: #mq{}.
 -type mqueue_options() :: [{size, pos_integer()}   |
                            {msgsize, pos_integer()}|
-                           {active, pid()} | own | noblock].
+                           {active, pid()}         |
+                           own                     |
+                           noblock].
     
--spec parse_options (mqueue_options()) -> {pos_integer(), pos_integer(), []|[noblock|own|{active, pid()}]}.
+-spec parse_options (mqueue_options()) -> {pos_integer(),
+                                            pos_integer(),
+                                            pid() | undefined,
+                                            []|[noblock|own|{active, pid()}]}.
 
 parse_options (Options) ->
-  QueueSize  = case lists:keyfind(size, 1, Options) of
-                 {size, Size} -> Size;
-                 false        -> 8
+  GetArg     = fun (Key, Def) ->
+                 case lists:keyfind(Key, 1, Options) of
+                   {Key, Size} -> Size;
+                   false        -> Def
+                 end
                end,
-  MaxMsgSize = case lists:keyfind(msgsize, 1, Options) of
-                 {msgsize, Size2} -> Size2;
-                 _               -> 256
-               end,
+  QueueSize  = GetArg(size, 8),
+  MaxMsgSize = GetArg(msgsize, 256),
+  Pid        = GetArg(active, undefined),
   Rest       = lists:filter(fun
                              (ValidOpt) when ValidOpt =:= own ; 
                                               ValidOpt =:= noblock ->
@@ -75,7 +81,7 @@ parse_options (Options) ->
                              (Opt) ->
                                 exit({badarg, Opt})
                             end, Options),
-  {QueueSize, MaxMsgSize, ?debugVal(Rest)}.
+  {QueueSize, MaxMsgSize, Pid, Rest}.
 
 -spec open (string()) -> {ok, mq()}.
 -spec open (string(), mqueue_options()) -> {ok, mq()}.
@@ -84,12 +90,12 @@ open (QueueName) when is_list(QueueName) ->
   open(QueueName, []).
 
 open (QueueName, Options) when is_list(QueueName), is_list(Options) ->
-  {QueueSize, MaxMsgSize, Rest} = parse_options(Options),
-  Rest2 = [case Opt of
-             {active, Pid} -> Pid;
-             Other         -> Other
-           end || Opt <- Rest],
-  case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize, ?debugVal(Rest2)) of
+  {QueueSize, MaxMsgSize, Pid, Rest} = parse_options(Options),
+  case mqueue_drv:open(QueueName, QueueSize, MaxMsgSize,
+                        case Pid of 
+                          undefined -> Rest;
+                          _         -> [Pid | Rest]
+                        end) of
       {ok, Q} -> {ok, #mq{hnd = Q}};
       Other   -> Other
   end.
