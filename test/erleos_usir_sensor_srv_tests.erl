@@ -32,18 +32,22 @@ usir_tear_down (#ctx{can_ctx = Ctx, this = S}) ->
   'CAN_msg_router_srv_tests':tear_down1(Ctx).
 
 '(ir) reading messages' (#ctx{this = S, router = R, queues = Qs, type = ir}) ->
-  {Msgs, Ids} = generate_usir_can_messages(ir, 16, R, Qs),
-  test_usir_reading(S, R, Qs, ir, {Msgs, Ids}).
+  P = generate_usir_can_messages(ir, 16, R, Qs),
+  test_usir_mqueue_output(Qs, P),
+  test_usir_reading(S, P).
 
 '(us) reading messages' (#ctx{this = S, router = R, queues = Qs, type = us}) ->
-  {Msgs, Ids} = generate_usir_can_messages(us, 16, R, Qs),
-  test_usir_reading(S, R, Qs, us, {Msgs, Ids}).
+  P = generate_usir_can_messages(us, 16, R, Qs),
+  test_usir_mqueue_output(Qs, P),
+  test_usir_reading(S, P).
 
 '(usir) reading messages' (#ctx{this = {S1, S2}, router = R, queues = [Qs1, Qs2], type = usir}) ->
   P1 = generate_usir_can_messages(us, 16, R, Qs1),
   P2 = generate_usir_can_messages(ir, 16, R, Qs2),
-  test_usir_reading(S1, R, Qs1, us, P1),
-  test_usir_reading(S2, R, Qs2, ir, P2).
+  test_usir_mqueue_output(Qs1, P1),
+  test_usir_mqueue_output(Qs2, P2),
+  test_usir_reading(S1, P1),
+  test_usir_reading(S2, P2).
 
 ir_test_ () ->
   tests_runner:run(fun ir_setup/0, fun usir_tear_down/1, "(ir)", ?MODULE).
@@ -89,12 +93,12 @@ create_ctx_for (Type) ->
                  end,
        type    = Type}.
 
-test_usir_reading (S, R, Qs, Type, {Msgs, Ids}) ->    
+test_usir_reading (S, {Msgs, Ids}) ->    
   Length    = length(Ids),
   IdSortFun = fun (X, Y) -> element(1, X) =< element(1, Y) end,
-  Latest    = lists:sublist(Msgs, length(Msgs)-Length+1, Length),
+  Newest    = lists:sublist(Msgs, length(Msgs)-Length+1, Length),
   Readings  = erleos_sensor:get_last_reading(S),
-  ?assertEqual(length(Readings), length(Latest)), 
+  ?assertEqual(length(Readings), length(Newest)), 
   ?assertEqual(Length, length(Readings)),
   ?assert(lists:foldl(fun ({Signal, Reading}, Bool) ->
                           {Id, _, Data = <<Value:16/little, _Cycle>>} = Signal,
@@ -102,9 +106,38 @@ test_usir_reading (S, R, Qs, Type, {Msgs, Ids}) ->
                                       {Id, Value} -> true;
                                       _           -> false
                                    end
-                       end, true, lists:zip(lists:sort(IdSortFun, Latest),
+                       end, true, lists:zip(lists:sort(IdSortFun, Newest),
                                              lists:sort(fun (X, Y) -> X#reading.sid =< Y#reading.sid end,
                                                         Readings)))).
+
+test_usir_mqueue_output (Qs, {Msgs, Ids}) ->    
+  Length    = length(Ids),
+  SFun      = fun (<<I1:16/little, T1:32/little, _V1:16/little, C1>>,
+                   <<I2:16/little, T2:32/little, _V2:16/little, C2>>) ->
+                   {I1, T1, C1} =< {I2, T2, C2}  
+              end,
+  Reader    = fun
+                (QName, undefined, Loop, Acc) ->
+                  {ok, Q} = mqueue:open(QName, [noblock]),
+                  Loop(Q, mqueue:recv(Q), Loop, []);
+                (Q, {ok, Data}, Loop, Acc) -> 
+                  Loop(Q, mqueue:recv(Q), Loop, [Data|Acc]);
+                (Q, {error, _}, _, Acc) ->
+                  mqueue:close(Q),
+                  lists:reverse(Acc)
+              end,  
+  Readings  = [lists:sort(SFun, Reader(QName, undefined, Reader, [])) || QName <- Qs],
+  Newest    = lists:sublist(Msgs, length(Msgs)-Length+1, Length),
+  [?assertEqual(Length, length(R)) || R <- Readings],
+  [?assertEqual(length(Newest), length(R)) || R <- Readings],
+  [?assert(lists:foldl(fun ({Signal, Reading}, Bool) ->
+                          {I1, _, <<V1:16/little, C1>>} = Signal,
+                          {I2, _, V2, C2}               = erleos_usir_sensor_srv:decode_mqueue_packet(Reading),
+                          Bool and case {I2, V2, C2} of  
+                                      {I1, V1, C1} -> true;
+                                      _            -> false
+                                   end
+                       end, true, lists:zip(lists:sort(Newest), Rs))) || Rs <- Readings].
 
 generate_usir_can_messages (Type, N, R, Qs) ->
   Ranges = lists:foldl(fun proplists:get_value/2,
@@ -127,7 +160,8 @@ clear_outdated_packets_from_queues ([Q|Tail]) when not is_list(Q) ->
   clear_outdated_packets_from_queues (Tail);
 clear_outdated_packets_from_queues (Qs) ->
   Cleaner = fun
-              (_, {error, eagain}, _) -> 
+              (Q, {error, eagain}, _) ->
+                mqueue:close(Q),
                 cleared;
               (Q, {ok, _}, Loop) ->
                 Loop(Q, mqueue:recv(Q), Loop)

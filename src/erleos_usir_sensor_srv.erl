@@ -14,6 +14,11 @@
 		      terminate/2,
 		      code_change/3]).
 
+-export ([encode_mqueue_packet/4,
+          decode_mqueue_packet/1]).
+-compile ([{inline, [{encode_mqueue_packet, 4},
+                     {decode_mqueue_packet, 1}]}]).
+
 -include ("proto/data_source.hrl").
 -include ("proto/sensor.hrl").
 -include ("proto/usir.hrl").
@@ -40,6 +45,12 @@
 -spec handle_info (info(), state()) -> {noreply, state()}.
 -spec terminate (shutdown, state()) -> any().
 -spec code_change (any(), state(), any()) -> {ok, state()}.
+
+encode_mqueue_packet (Id, Time, Value, Cycle) ->
+  <<Id:16/little, Time:32/little, Value:16/little, Cycle>>.
+
+decode_mqueue_packet (<<Id:16/little, Time:32/little, Value:16/little, Cycle>>) ->
+  {Id, Time, Value, Cycle}.
 
 init (Options) when is_list(Options) ->
   {ok, CANRt}  = erleos_utils:get_arg(usir_can_router, Options),
@@ -152,7 +163,7 @@ emit_data (Readings, State = #state{type = Type}) ->
                                time  = Time,
                                value = Value,
                                cycle = Cycle}, NotSent) when RType =:= Type ->
-                  Packet = <<Id:16/little, Time:32/little, Value:16/little, Cycle>>,
+                  Packet = encode_mqueue_packet(Id, Time, Value, Cycle),
                   case write_queues(Packet, State) of
                     []    -> NotSent;
                     Other -> [{Packet, Other} | NotSent] 
