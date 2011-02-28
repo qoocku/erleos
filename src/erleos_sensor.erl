@@ -19,7 +19,7 @@
 %%% E x p o r t e d  A P I  F u n c t i o n s
 %%% ==========================================================================
 
--export ([get_last_reading/1]).
+-export ([get_last_reading/1, behaviour_info/1]).
 
 %%% ==========================================================================
 %%% E x p o r t e d  I n t e rn a l  F u n c t i o n s
@@ -30,6 +30,14 @@
 %%% ==========================================================================
 %%% A P I  F u n c ti o n s
 %%% ==========================================================================
+
+behaviour_info (callbacks) ->
+  [{init, 1},
+   {option, 2},
+   {convert_data, 4},
+   {terminate, 2}];
+behaviour_info (_) ->
+  undefined.
 
 %% @doc Gets last recorded scan from given sensor.
 

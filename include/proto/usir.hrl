@@ -6,10 +6,10 @@
                        voltage   = 0 :: pos_integer(),
                        wtime     = 0 :: pos_integer()}).
 
--record (raw_data, {type  = undefined :: us | ir,
-                    id    = 0 :: pos_integer(),
-                    time  = 0 :: pos_integer(),
-                    value = 0 :: pos_integer(),
-                    cycle = 0 :: pos_integer()}).
+-record (usir_data, {type  = undefined :: us | ir,
+                     id    = 0 :: pos_integer(),
+                     time  = now() :: ts(),
+                     value = 0 :: pos_integer(),
+                     cycle = 0 :: pos_integer()}).
 
 -endif.

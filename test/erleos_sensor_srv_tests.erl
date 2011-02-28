@@ -4,12 +4,14 @@
 %%% @doc TODO: Add description to erleos_usir_srv_tests
 %%% @end
 %%% ==========================================================================
--module  (erleos_usir_sensor_srv_tests).
+-module  (erleos_sensor_srv_tests).
 -author  ("Damian T. Dobroczy\\'nski <qoocku@gmail.com> <email>").
 -compile (export_all).
 
 -include_lib ("eunit/include/eunit.hrl").
 -include ("proto/sensor.hrl").
+-include ("proto/usir.hrl").
+-include ("proto/adis.hrl").
 
 -record (ctx, {can_ctx, this, router, queues, type}).
 
@@ -18,6 +20,9 @@ ir_setup () ->
 
 us_setup () ->
   create_ctx_for(us).
+
+adis_setup () ->
+  create_ctx_for(adis).
 
 usir_setup () ->
   create_ctx_for(usir).
@@ -63,7 +68,10 @@ create_ctx_for (Type) ->
   Ctx = 'CAN_msg_router_srv_tests':setup1(),
   % read erleos app config
   {ok, [Cfg]} = file:consult(filename:join([filename:dirname(code:which(?MODULE)), "..", "priv", "erleos.config"])),
-  register(Ds = list_to_atom(lists:foldl(fun proplists:get_value/2, Cfg, [erleos, usir_can_router, candev])),
+  register(Ds = list_to_atom(lists:foldl(fun proplists:get_value/2, Cfg, [erleos, case Type of
+                                                                                    adis  -> adis_can_router;
+                                                                                    Other -> usir_can_router
+                                                                                   end, candev])),
            element(2, Ctx)),
   ok          = lists:foldl(fun ({Key, Val}, ok) ->
                                application:set_env(erleos, Key, Val)
@@ -72,12 +80,16 @@ create_ctx_for (Type) ->
   {ok, S} = case Type of
               usir ->
                 Ss = [begin
-                        {ok, S} = erleos_utils:start(erleos_usir_sensor_srv, [{args, [{type, T}]}]), 
+                        {ok, S} = erleos_utils:start(erleos_sensor_srv, [{args, [{type, T}, {cmod,
+                                                                                             [{mod, list_to_atom("erleos_" ++ T ++ "_sensor_module")},
+                                                                                              {args, []}]}]}]), 
                         S
-                      end || T <- [us, ir]],
+                      end || T <- ["us", "ir"]],
                 {ok, list_to_tuple(Ss)};
               _    ->
-                erleos_utils:start(erleos_usir_sensor_srv, [{args, [{type, Type}]}])
+                erleos_utils:start(erleos_sensor_srv, [{args, [{type, Type}, {cmod, 
+                                                                              [{mod, list_to_atom("erleos_" ++ atom_to_list(Type) ++ "_sensor_module")},
+                                                                               {args, []}]}]}])
             end,
   #ctx{can_ctx = Ctx,
        this    = S,
@@ -87,8 +99,9 @@ create_ctx_for (Type) ->
                       [lists:foldl(fun proplists:get_value/2, ErlCfg, [T, mqueues, output]) || T <- [us_sensor, ir_sensor]];
                     _    -> 
                       lists:foldl(fun proplists:get_value/2, ErlCfg, [case Type of
-                                                                         ir -> ir_sensor;
-                                                                         us -> us_sensor
+                                                                         ir   -> ir_sensor;
+                                                                         us   -> us_sensor;
+                                                                         adis -> adis_sensor
                                                                        end, mqueues, output])
                  end,
        type    = Type}.
@@ -102,12 +115,12 @@ test_usir_reading (S, {Msgs, Ids}) ->
   ?assertEqual(Length, length(Readings)),
   ?assert(lists:foldl(fun ({Signal, Reading}, Bool) ->
                           {Id, _, Data = <<Value:16/little, _Cycle>>} = Signal,
-                          Bool and case {Reading#reading.sid, Reading#reading.value} of  
+                          Bool and case {Reading#usir_data.id, Reading#usir_data.value} of  
                                       {Id, Value} -> true;
                                       _           -> false
                                    end
                        end, true, lists:zip(lists:sort(IdSortFun, Newest),
-                                             lists:sort(fun (X, Y) -> X#reading.sid =< Y#reading.sid end,
+                                             lists:sort(fun (X, Y) -> X#usir_data.id =< Y#usir_data.id end,
                                                         Readings)))).
 
 test_usir_mqueue_output (Qs, {Msgs, Ids}) ->    
@@ -143,8 +156,9 @@ generate_usir_can_messages (Type, N, R, Qs) ->
   Ranges = lists:foldl(fun proplists:get_value/2,
                        application:get_all_env(erleos),
                        [usir_can_router, case Type of
-                                           ir -> ir_data_id;
-                                           us -> us_data_id
+                                           ir   -> ir_data_id;
+                                           us   -> us_data_id;
+                                           adis -> adis_data_ir
                                          end]),
   IdList = lists:flatten([[Id || Id <- lists:seq(Left, Right)] || {Left, Right} <- Ranges]),
   Msgs   = lists:flatten([[{Id, {Cycle, 0}, <<Cycle:16/little, Cycle>>} || Id <- IdList] || Cycle <- lists:seq(1, N)]),

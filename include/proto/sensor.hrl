@@ -7,11 +7,11 @@
 -type sensor_id()       :: any().                            
 
 -record (get_last_reading, {}).
--record (reading, {sid   :: sensor_id(),
-                   ts    :: ts(),
-                   value :: any()}).
+-record (raw_data, {sid   :: sensor_id(),
+                    ts    :: pos_integer(),
+                    value :: binary()}).
 
--type reading          () :: #reading{}.
+-type reading          () :: any().
 -type can_reading      () :: {integer(), {integer(), integer()}, binary()}.
 -type get_last_reading () :: #get_last_reading{}.
 
