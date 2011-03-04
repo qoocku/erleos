@@ -52,8 +52,8 @@
 encode_mqueue_packet (Id, Time, Value) ->
   <<Id:16/little, Time:32/little, Value/binary>>.
 
-decode_mqueue_packet (<<Id:16/little, Time:32/little, Value:16/little, Cycle>>) ->
-  {Id, Time, Value, Cycle}.
+decode_mqueue_packet (<<Id:16/little, Time:32/little, Rest/binary>>) ->
+  {Id, Time, Rest}.
 
 init (Options) when is_list(Options) ->
   {ok, ModInf} = erleos_utils:get_arg(cmod, Options),

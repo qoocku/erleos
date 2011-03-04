@@ -14,6 +14,7 @@
 
 -export ([]).
 
+-include_lib ("eunit/include/eunit.hrl").
 -include ("proto/sensor.hrl").
 -include ("proto/adis.hrl").
 
@@ -50,7 +51,7 @@ option (sensor, #state{type = T}) ->
 option (type, #state{type = T}) ->
   T;
 option (data_id, #state{type = T}) ->
-  list_to_atom(atom_to_list(T) ++ "_data_id").
+  list_to_atom(atom_to_list(T) ++ "_id").
 
 convert_data (Id, Timestamp, Data, #state{type = T}) ->
   to_data(T, Id, Timestamp, Data).
