@@ -59,7 +59,7 @@ tear_down (#ctx{can_ctx = Ctx, this = S}) ->
 
 '(adis) reading messages'(#ctx{this = S, router = R, queues = Qs, type = {adis, T}}) ->
     P = generate_can_messages({adis, T}, 16, R, Qs), 
-    [test_mqueue_output({adis, T}, Qss, P) || Qss <- Qs], 
+    test_mqueue_output({adis, T}, Qs, P), 
     test_reading(S, P).
 
 ir_test_ () ->
@@ -173,40 +173,99 @@ test_reading(S,{Msgs,Ids}) ->
 
 test_mqueue_output(_, _, {[], _}) ->
   ok;
-test_mqueue_output(Type, Qs, {Msgs,Ids}) ->
-  Length = length(Ids), 
-  SFun   = get_sort_fun(Type), 
-  Reader = fun (QName,undefined,Loop,Acc) ->
-                 {ok,Q} = mqueue:open(QName,[noblock]), 
-                 Loop(Q,mqueue:recv(Q),Loop,[]);
-             (Q,{ok,Data},Loop,Acc) ->
-               Loop(Q,mqueue:recv(Q),Loop,[Data| Acc]);
-             (Q,{error,_},_,Acc) ->
-               mqueue:close(Q), 
-               lists:reverse(Acc)
-           end, 
-  Readings = [lists:sort(SFun,Reader(QName,undefined,Reader,[])) || QName <- Qs], 
-  Newest = lists:sublist(Msgs,length(Msgs)-Length+1,Length), 
-  [?assertEqual(Length,length(R)) || R <- Readings], 
-  [?assertEqual(length(Newest),length(R)) || R <- Readings], 
-  [?assert(lists:foldl(fun ({Signal,Reading},Bool) ->
-                          {I1, _, <<V1:16/little, C1>>} = Signal, 
-                          {I2, _, <<V2:16/little, C2>>} = erleos_sensor_srv:decode_mqueue_packet(Reading), 
-                          Bool and case {I2,V2,C2} of
-                                      {I1,V1,C1} -> true;
-                                      _ -> false
-                                    end
-                        end, true, lists:zip(lists:sort(Newest),Rs))) || Rs <- Readings].
+test_mqueue_output(Type, Qs, {Msgs, Ids}) ->  
+  Reader = get_mqueue_reader(Type), 
+  check_mqueue_output(Type, Qs, Msgs, Reader, Ids).
 
-get_sort_fun ({adis, _}) ->
+check_mqueue_output (_, [], [], _, []) ->
+  ok;
+check_mqueue_output (Type, Qs, Msgs, Reader, Ids)
+  when Type =:= ir orelse Type =:= us orelse Type =:= usir ->
+  Rs     = lists:foldl(fun(QName, Acc) ->
+                         Reader(QName, undefined, Reader, Acc)
+                       end, [], Qs),
+  Reader2 = fun (Data, undefined, _, undefined) -> Data end,
+  check_mqueue_output(fake, [[R] || R <- lists:sort(Rs)], 
+                      lists:sublist(lists:sort(fun({I1, T1, _}, {I2, T2, _}) ->
+                                                    T1 >= T2 andalso I1 =< I2
+                                               end, Msgs), length(Ids)), Reader2, Ids);
+check_mqueue_output (Type, [Qss | Qs], [Msg | Msgs], Reader, [I1 | Ids]) ->
+  Reading       = lists:foldl(fun(QName, Acc) ->
+                                   Reader(QName, undefined, Reader, Acc)
+                              end, undefined, Qss),
+  Id            = case I1 of
+                    {_, I} -> I;
+                    I1     -> I1
+                  end,
+  {Id, _, Data1} =  Msg, 
+  case Reading of
+    <<>> -> ok;
+    _    ->
+      {I2, _, Data2} = erleos_sensor_srv:decode_mqueue_packet(Reading),
+      ?assert(cmp_mqueue_datas(Type, Data1, Data2) andalso Id =:= I2)
+  end,
+  check_mqueue_output (Type, Qs, Msgs, Reader, Ids).
+
+get_mqueue_reader ({adis, _}) ->
+  fun 
+    (QName, undefined, Loop, undefined) ->
+      {ok, Q} = mqueue:open(QName, [noblock]), 
+      Loop(Q, mqueue:recv(Q), Loop, undefined);
+    (Q, {ok, Data}, Loop, undefined) ->
+      Loop(Q, mqueue:recv(Q), Loop, Data);
+    (Q, {ok, Data}, Loop, Data) ->
+      Loop(Q, mqueue:recv(Q), Loop, Data);
+    (Q, {error,_}, _, Acc) ->
+      mqueue:close(Q), 
+      Acc
+  end;
+get_mqueue_reader (_) ->
+  fun 
+    (QName, undefined, Loop, Acc) ->
+      {ok, Q} = mqueue:open(QName, [noblock]), 
+      Loop(Q, mqueue:recv(Q), Loop, Acc);
+    (Q, {ok, Data}, Loop, Acc) ->
+      Loop(Q, mqueue:recv(Q), Loop, [Data|Acc]);
+    (Q, {error,_}, _, Acc) ->
+      mqueue:close(Q), 
+      lists:reverse(Acc)
+  end.  
+
+cmp_mqueue_datas ({adis, _}, Data1, Data2) ->
+  case {Data1, Data2} of
+    {<<A:16/little, B:16/little, C:16/little>>,
+     <<A:16/little, B:16/little, C:16/little>>}       -> true;
+    {<<A:16/little>>, <<A:16/little>>}                -> true;
+    {<<A, B, C:16/little, D:16/little, E:16/little>>,
+     <<A, B, C:16/little, D:16/little, E:16/little>>} -> true;
+    {<<A>>, <<A>>}                                     -> true
+  end;
+cmp_mqueue_datas (_, Data1, Data2) ->
+  <<V1:16/little, C1>> = Data1,
+  <<V2:16/little, C2>> = Data2,
+  case {V2, C2} of
+    {V1, C1} -> true;
+    _        -> false
+  end.
+
+
+get_sort_fun ({adis, undefined}, mqueue) ->
   fun (<<I1:16/little,T1:32/little,_/binary>>,
         <<I2:16/little,T2:32/little,_/binary>>) ->
     {I1,T1} =< {I2,T2}
   end;
-get_sort_fun (_) ->
+get_sort_fun ({adis, undefined}, reading) ->
+  fun ({I1, T1, _}, {I2, T2, _}) ->
+    {I1, T1} =< {I2, T2}
+  end;
+get_sort_fun (_, mqueue) ->
   fun (<<I1:16/little,T1:32/little,_V1:16/little,C1>>,
         <<I2:16/little,T2:32/little,_V2:16/little,C2>>) ->
     {I1,T1,C1}=<{I2,T2,C2}
+  end;
+get_sort_fun (_, reading) ->
+  fun ({I1, T1, _}, {I2, T2, _}) ->
+    {I1, T1} =< {I2, T2}
   end.
 
 generate_can_messages(Type, N, R, Qs) ->
