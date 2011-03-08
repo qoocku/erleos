@@ -39,28 +39,22 @@ tear_down (#ctx{can_ctx = Ctx, this = S}) ->
   erleos_utils:sync_stop(S),
   'CAN_msg_router_srv_tests':tear_down1(Ctx).
 
-'(ir) reading messages'(#ctx{this = S, router = R, queues = Qs, type = ir}) ->
-    P = generate_can_messages(ir,16,R,Qs), 
-    test_mqueue_output(ir,Qs,P), 
-    test_reading(S,P).
+'(ir) reading messages'(Ctx) ->
+    test_reading_messages(Ctx).
 
-'(us) reading messages'(#ctx{this = S, router = R, queues = Qs, type = us}) ->
-    P = generate_can_messages(us,16,R,Qs), 
-    test_mqueue_output(us,Qs,P), 
-    test_reading(S,P).
+'(us) reading messages'(Ctx) ->
+    test_reading_messages(Ctx).
 
-'(usir) reading messages'(#ctx{this = {S1,S2}, router = R, queues = [Qs1,Qs2], type = usir}) ->
-    P1 = generate_can_messages(us,16,R,Qs1), 
-    P2 = generate_can_messages(ir,16,R,Qs2), 
-    test_mqueue_output(ir,Qs1,P1), 
-    test_mqueue_output(us,Qs2,P2), 
-    test_reading(S1,P1), 
-    test_reading(S2,P2).
+'(usir) reading messages'(#ctx{this = {S1, S2}, router = R, queues = [Qs1, Qs2], type = usir}) ->
+    P1 = generate_can_messages(us, 16, R, Qs1), 
+    P2 = generate_can_messages(ir, 16, R, Qs2), 
+    test_mqueue_output(ir, Qs1, P1), 
+    test_mqueue_output(us, Qs2, P2), 
+    test_reading(us, S1, P1), 
+    test_reading(ir, S2, P2).
 
-'(adis) reading messages'(#ctx{this = S, router = R, queues = Qs, type = {adis, T}}) ->
-    P = generate_can_messages({adis, T}, 16, R, Qs), 
-    test_mqueue_output({adis, T}, Qs, P), 
-    test_reading(S, P).
+'(adis) reading messages'(Ctx) ->    
+    test_reading_messages(Ctx).
 
 ir_test_ () ->
   tests_runner:run(fun ir_setup/0, fun tear_down/1, "(ir)", ?MODULE).
@@ -129,15 +123,25 @@ create_ctx_for (Type) ->
                  end,
        type    = Type}.
 
-test_reading (_, {[], _}) ->
+test_reading_messages (#ctx{this = S, router = R, queues = Qs, type = Type}) ->
+    P = generate_can_messages(Type, 16, R, Qs), 
+    test_mqueue_output(Type, Qs, P), 
+    test_reading(Type, S, P).
+
+test_reading (_, _, {[], _}) ->
   ok;
-test_reading(S,{Msgs,Ids}) ->
-  Length = length(Ids), 
-  IdSortFun = fun (X,Y) -> element(1,X)=<element(1,Y) end, 
-  Newest = lists:sublist(Msgs,length(Msgs)-Length+1,Length), 
-  Readings = erleos_sensor:get_last_reading(S), 
-  ?assertEqual(length(Readings),length(Newest)), 
-  ?assertEqual(Length,length(Readings)), 
+test_reading(Type, S, {Msgs, Ids}) ->
+  Length    = length(Ids), 
+  IdSortFun = get_sort_fun(Type, reading), 
+  Newest    = lists:sublist(Msgs, length(Msgs)-Length+1, Length), 
+  Readings  = case S of
+                Ss when is_list(Ss) ->
+                  lists:flatten([erleos_sensor:get_last_reading(Srv) || Srv <- Ss]);
+                S ->
+                  erleos_sensor:get_last_reading(S)
+              end,
+  ?assertEqual(length(Readings), length(Newest)), 
+  ?assertEqual(Length, length(Readings)), 
   ?assert(lists:foldl(fun 
                          ({{Id, _, <<Value:16/little, _>>},
                            #usir_data{id = Id, value = Value}}, Bool) -> 
@@ -159,23 +163,24 @@ test_reading(S,{Msgs,Ids}) ->
                            Bool and true;
                          ({{Id, _, <<Info>>},
                            #movinfo_data{id = Id, info = Info}}, Bool) ->
-                           Bool and true;
-                         (_, _) ->
-                           false
-                       end, true, lists:zip(lists:sort(IdSortFun,Newest),
-                                             lists:sort(fun 
-                                                          (X = #usir_data{}, Y = #usir_data{}) -> 
-                                                            X#usir_data.id =< Y#usir_data.id;
-                                                          (X, Y) when is_tuple(X), is_tuple(Y) ->
-                                                            element(2, X) =< element(2, Y)
-                                                        end,
-                                                        Readings)))).
+                           Bool and true
+                      %;
+                      %   (_, _) ->
+                      %     false
+                      end, true, lists:zip(lists:sort(IdSortFun, Newest),
+                                            lists:sort(fun 
+                                                        (X = #usir_data{}, Y = #usir_data{}) -> 
+                                                          X#usir_data.id =< Y#usir_data.id;
+                                                        (X, Y) -> true
+                                                      end,
+                                                      Readings)))).
 
 test_mqueue_output(_, _, {[], _}) ->
   ok;
 test_mqueue_output(Type, Qs, {Msgs, Ids}) ->  
-  Reader = get_mqueue_reader(Type), 
-  check_mqueue_output(Type, Qs, Msgs, Reader, Ids).
+  Reader = get_mqueue_reader(Type),
+  SFun   = get_sort_fun(Type, reading),
+  check_mqueue_output(Type, Qs, lists:sort(SFun, Msgs), Reader, Ids).
 
 check_mqueue_output (_, [], [], _, []) ->
   ok;
@@ -189,9 +194,11 @@ check_mqueue_output (Type, Qs, Msgs, Reader, Ids)
                       lists:sublist(lists:sort(fun({I1, T1, _}, {I2, T2, _}) ->
                                                     T1 >= T2 andalso I1 =< I2
                                                end, Msgs), length(Ids)), Reader2, Ids);
+check_mqueue_output ({adis, ST}, Qs, Msgs, Reader, Ids) when ST =/= fake->
+  check_mqueue_output({adis, fake}, Qs, lists:sublist(Msgs, length(Ids)), Reader, Ids);
 check_mqueue_output (Type, [Qss | Qs], [Msg | Msgs], Reader, [I1 | Ids]) ->
   Reading       = lists:foldl(fun(QName, Acc) ->
-                                   Reader(QName, undefined, Reader, Acc)
+                                 Reader(QName, undefined, Reader, Acc)
                               end, undefined, Qss),
   Id            = case I1 of
                     {_, I} -> I;
@@ -202,7 +209,7 @@ check_mqueue_output (Type, [Qss | Qs], [Msg | Msgs], Reader, [I1 | Ids]) ->
     <<>> -> ok;
     _    ->
       {I2, _, Data2} = erleos_sensor_srv:decode_mqueue_packet(Reading),
-      ?assert(cmp_mqueue_datas(Type, Data1, Data2) andalso Id =:= I2)
+      ?assert(Id =:= I2 andalso cmp_mqueue_datas(Type, Data1, Data2))
   end,
   check_mqueue_output (Type, Qs, Msgs, Reader, Ids).
 
@@ -252,11 +259,11 @@ cmp_mqueue_datas (_, Data1, Data2) ->
 get_sort_fun ({adis, undefined}, mqueue) ->
   fun (<<I1:16/little,T1:32/little,_/binary>>,
         <<I2:16/little,T2:32/little,_/binary>>) ->
-    {I1,T1} =< {I2,T2}
+    T2 >= T1 andalso I1 =< I2
   end;
 get_sort_fun ({adis, undefined}, reading) ->
   fun ({I1, T1, _}, {I2, T2, _}) ->
-    {I1, T1} =< {I2, T2}
+    T1 >= T2 andalso I1 =< I2
   end;
 get_sort_fun (_, mqueue) ->
   fun (<<I1:16/little,T1:32/little,_V1:16/little,C1>>,

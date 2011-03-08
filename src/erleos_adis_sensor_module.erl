@@ -109,9 +109,9 @@ to_data (factors, Id, Timestamp, Data) ->
                  id   = Id}, #raw_data{sid   = Id,
                                        ts    = ?can_ts_to_ms(Timestamp),
                                        value = Data}};
-to_data (movinfo, Id, Timestamp, Data) ->
+to_data (movinfo, Id, Timestamp, <<Data>>) ->
   {#movinfo_data{info = Data,
                  time  = ?can_ts_to_now(Timestamp),
                  id    = Id}, #raw_data{sid   = Id,
                                         ts    = ?can_ts_to_ms(Timestamp),
-                                        value = Data}}.
+                                        value = <<Data>>}}.
