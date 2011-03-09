@@ -6,7 +6,7 @@
                        voltage   = 0 :: pos_integer(),
                        wtime     = 0 :: pos_integer()}).
 
--record (usir_data, {type  = undefined :: us | ir,
+-record (usir_data, {type  = undefined :: us | ir | undefined,
                      id    = 0 :: pos_integer(),
                      time  = now() :: ts(),
                      value = 0 :: pos_integer(),

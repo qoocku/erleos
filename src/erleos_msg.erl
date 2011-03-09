@@ -17,7 +17,8 @@
 %%% C l i e n t  A P I  E x p o r t s
 %%% --------------------------------------------------------------------
 
--export ([to_binary/1]).
+-export ([to_binary/1,
+          to_term  /2]).
 
 %%% --------------------------------------------------------------------
 %%% I n t e r n a l  e x p o r t s
@@ -67,7 +68,6 @@ to_binary (?DHDR(factors_data, n = N, z = Z, k = K, kv = KV, kw = KW)) ->
   ?DBIN(N, Z, K:16/little, KV:16/little, KW:16/little);
 to_binary (?DHDR(movinfo_data, info = Info)) ->
   ?DBIN(Info);
-
 to_binary (?DHDR(usir_data, value = Value, cycle = Cycle)) ->
   ?DBIN(Value:16/little, Cycle);
 
@@ -75,6 +75,25 @@ to_binary (#msg_heartbeat{pid = Pid, time = Time}) ->
   <<?MSG_HEARTBEAT, Pid:32/little, (to_msec(Time)):16/little>>.
 
 
+-spec to_term (atom(), binary()) -> any().
+
+to_term (accel_data, ?DBIN(AX:16/little, AY:16/little, AZ:16/little)) -> 
+  ?DHDR(accel_data, ax = AX, ay = AY, az = AZ);
+to_term (angvel_data, ?DBIN(AX:16/little, AY:16/little, AZ:16/little)) -> 
+  ?DHDR(angvel_data, ax = AX, ay = AY, az = AZ);
+to_term (pos_data, ?DBIN(X:16/little, Y:16/little, Phi:16/little)) ->
+  ?DHDR(pos_data, x = X, y = Y, phi = Phi);
+to_term (linvel_data, ?DBIN(X:16/little)) ->
+  ?DHDR(linvel_data, x = X);
+to_term (factors_data, ?DBIN(N, Z, K:16/little, KV:16/little, KW:16/little)) ->
+  ?DHDR(factors_data, n = N, z = Z, k = K, kv = KV, kw = KW);
+to_term (movinfo_data, ?DBIN(Info)) ->
+  ?DHDR(movinfo_data, info = Info);
+to_term (UsirType, ?DBIN(Value:16/little, Cycle)) when UsirType =:= ir orelse UsirType =:= us->
+  (?DHDR(usir_data, value = Value, cycle = Cycle))#usir_data{type = UsirType}.
+
+
+  
 %%% ============================================================================
 %%% L o c a l  F u n c t i o n s
 %%% ============================================================================
