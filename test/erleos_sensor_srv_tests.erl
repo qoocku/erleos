@@ -9,9 +9,9 @@
 -compile (export_all).
 
 -include_lib ("eunit/include/eunit.hrl").
--include ("proto/sensor.hrl").
--include ("proto/usir.hrl").
--include ("proto/adis.hrl").
+-include ("erleos/include/proto/sensor.hrl").
+-include ("erleos/include/proto/usir.hrl").
+-include ("erleos/include/proto/adis.hrl").
 
 -record (ctx, {can_ctx, this, router, queues, type}).
 

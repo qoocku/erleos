@@ -1,9 +1,8 @@
 -ifndef (ERLEOS_SENSOR_HRL).
 -define (ERLEOS_SENSOR_HRL, true).
 
--type ts()              :: {non_neg_integer(), 
-                            non_neg_integer(), 
-                            non_neg_integer()}.
+-include ("erleos/include/types.hrl").
+
 -type sensor_id()       :: any().                            
 
 -record (get_last_reading, {}).

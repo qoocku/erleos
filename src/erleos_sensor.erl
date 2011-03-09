@@ -12,8 +12,8 @@
 %%% ==========================================================================
 
 %%%-include_lib ().
--include ("types.hrl").
--include ("proto/sensor.hrl").
+-include ("erleos/include/types.hrl").
+-include ("erleos/include/proto/sensor.hrl").
 
 %%% ==========================================================================
 %%% E x p o r t e d  A P I  F u n c t i o n s

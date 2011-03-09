@@ -15,7 +15,7 @@
 
 %%-include_lib ().
 -include ("types.hrl").
--include ("proto/data_source.hrl").
+-include ("erleos/include/proto/data_source.hrl").
 
 %%% ==========================================================================
 %%% E x p o r t e d  A P I  F u n c t i o n s

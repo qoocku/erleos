@@ -9,7 +9,7 @@
 
 -compile (export_all).
 -include_lib ("eunit/include/eunit.hrl").
--include ("proto/data_source.hrl").
+-include ("erleos/include/proto/data_source.hrl").
 
 -record (ctx, {srv}).
 

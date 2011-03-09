@@ -15,8 +15,8 @@
 
 -export ([]).
 
--include ("proto/sensor.hrl").
--include ("proto/usir.hrl").
+-include ("erleos/include/proto/sensor.hrl").
+-include ("erleos/include/proto/usir.hrl").
 
 %%% --------------------------------------------------------------------
 %%% I n t e r n a l  e x p o r t s

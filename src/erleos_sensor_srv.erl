@@ -20,9 +20,8 @@
                      {decode_mqueue_packet, 1}]}]).
 
 -include_lib ("eunit/include/eunit.hrl").
--include ("proto/data_source.hrl").
--include ("proto/sensor.hrl").
--include ("proto/usir.hrl").
+-include ("erleos/include/proto/data_source.hrl").
+-include ("erleos/include/proto/sensor.hrl").
 
 -type readings    () :: [reading()].
 -type can_readings() :: [can_reading()].

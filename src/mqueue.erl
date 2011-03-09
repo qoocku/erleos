@@ -12,7 +12,7 @@
 %%% ==========================================================================
 
 -include_lib ("eunit/include/eunit.hrl").
--include ("proto/mqueue.hrl").
+-include ("erleos/include/proto/mqueue.hrl").
 
 %%% ==========================================================================
 %%% E x p o r t e d  A P I  F u n c t i o n s

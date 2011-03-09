@@ -15,7 +15,7 @@
           terminate/2,
           code_change/3]).
 
--include ("proto/mqueue.hrl").
+-include ("erleos/include/proto/mqueue.hrl").
 
 %%% ==========================================================================
 %%% B e h a v i o r  A P I

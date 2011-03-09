@@ -15,8 +15,8 @@
 -export ([]).
 
 -include_lib ("eunit/include/eunit.hrl").
--include ("proto/sensor.hrl").
--include ("proto/adis.hrl").
+-include ("erleos/include/proto/sensor.hrl").
+-include ("erleos/include/proto/adis.hrl").
 
 %%% --------------------------------------------------------------------
 %%% I n t e r n a l  e x p o r t s
