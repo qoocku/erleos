@@ -87,7 +87,7 @@ tear_down2 (#ctx{srv = S}) ->
                end),  
   ?assertEqual(ok, erleos_ds:subscribe(S, {1, 6}, [Pid])),
   ?assert(receive
-            {data, Data} ->
+            {data, #ds_data{readings = Data}} ->
               lists:foldl(fun (Id, true) ->
                             lists:keymember(Id, 1, Data)
                           end, true, lists:seq(1, 6))                

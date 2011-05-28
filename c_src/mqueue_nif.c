@@ -15,7 +15,7 @@
 #define MODULE "mqueue_drv"
 
 #include "erl_nif.h"
-#include "nif_utils.c"
+#include "nif_utils.h"
 
 /** Some common atoms **/
 static ERL_NIF_TERM error_atom;

@@ -1,0 +1,12 @@
+{application, erleos,
+ [
+  {description, "Leonardi Onboard System"},
+  {vsn, "1.0.0"},
+  {registered, [erleos_sup]},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { erleos_app, []}},
+  {env, []}
+ ]}.

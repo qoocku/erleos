@@ -44,7 +44,7 @@ init (Args) when is_list(Args) ->
                                                    (Option, {MQo, MyO}) ->
                                                      {[Option|MQo], MyO}
                                                  end, {[], []}, Options),
-  {QueueSize, MaxMsgSize, Rest} = mqueue:parse_options(MQOptions),
+  {QueueSize, MaxMsgSize, _, Rest} = mqueue:parse_options(MQOptions),
   {ok, Q} = mqueue_drv:open(QueueName, QueueSize, MaxMsgSize,
                             case lists:member(noblock, Rest) of
                               false -> [noblock|Rest];

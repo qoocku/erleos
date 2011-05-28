@@ -10,13 +10,14 @@
 -include_lib ("eunit/include/eunit.hrl").
 
 valid_parse_option_test () ->
-  {QS, MMS, Rest} = mqueue:parse_options([]),
+  {QS, MMS, _, Rest} = mqueue:parse_options([]),
   check_parsing_result(QS, MMS, Rest),
-  {QS2, MMS2, Rest2} = mqueue:parse_options([own]),
+  {QS2, MMS2, _, Rest2} = mqueue:parse_options([own]),
   check_parsing_result(QS2, MMS2, Rest2),
-  {QS3, MMS3, Rest3} = mqueue:parse_options([{active, self()}]),
+  Self                 = self(),
+  {QS3, MMS3, Self, Rest3} = mqueue:parse_options([{active, Self}]),
   check_parsing_result(QS3, MMS3, Rest3),
-  {QS4, MMS4, Rest4} = mqueue:parse_options([{active, self()}, own]),
+  {QS4, MMS4, Self, Rest4} = mqueue:parse_options([{active, self()}, own]),
   check_parsing_result(QS4, MMS4, Rest4).  
 
 check_parsing_result (QS, MMS, Rest) ->
