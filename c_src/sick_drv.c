@@ -210,7 +210,7 @@ port_init (sick_drv_t* self)
 int
 data_read(sick_drv_t* self, int size, int offset)
 {
-  DWORD len = size;
+  DWORD len = size, read = 0;
   DWORD EventDWord;
   DWORD RxBytes;
   DWORD TxBytes;
@@ -227,11 +227,11 @@ data_read(sick_drv_t* self, int size, int offset)
       printf("RxBytes: %li", (long int)RxBytes);
       if (RxBytes > 0) {
         self->ftStatus = FT_Read(self->ftHandle,
-                                   &self->temp_buffer[offset], min(RxBytes, len),
+                                   &self->temp_buffer[offset], read = min(RxBytes, len),
                                    &len);
         if (FT_SUCCESS(self->ftStatus))
           {
-            len -= RxBytes;
+            len -= read;
           }
         else
           {
