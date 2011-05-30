@@ -14,33 +14,11 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <time.h>
+#include <pthread.h>
 
 #include "ftd2xx.h"
 
 #include "sick_drv.h"
-
-struct sick_drv
-{
-  distance_frame_t measurement[SICK_MAX_FRAMES];
-  unsigned char temp_buffer[10000];
-  unsigned short int scan[362];
-
-  unsigned char * sick_cmd;
-  unsigned char * sick_ans_header;
-
-  int sick_cmd_size;
-  int sick_ans_size;
-  int frame_errors;
-
-  struct timeval start_time;
-
-  unsigned int index_frame_w, index_frame_r;
-
-  FT_STATUS ftStatus;
-  FT_HANDLE ftHandle;
-
-};
-typedef struct sick_drv sick_drv_t;
 
 #define CRC16_GEN_POL  0x8005
 #define MKSHORT(a,b)   ((unsigned short) (a) | ((unsigned short)(b) << 8))
@@ -71,6 +49,30 @@ unsigned char SICK_ANS_SCAN[] = { 0x02, 0x80, 0xD6, 0x02, 0xB0};
 
 // liczba maksymalnych blednych ramek w ciagu
 #define SICK_FRAME_ERRORS_LIMIT 5
+
+struct sick_drv
+{
+  distance_frame_t measurement[SICK_MAX_FRAMES];
+  unsigned char temp_buffer[SICK_ANS_SCAN_SIZE * 10];
+  unsigned short int scan[362];
+
+  unsigned char * sick_cmd;
+  unsigned char * sick_ans_header;
+
+  int sick_cmd_size;
+  int sick_ans_size;
+  int frame_errors;
+  int tmp_pos;
+
+  struct timeval start_time;
+
+  unsigned int index_frame_w, index_frame_r;
+
+  FT_STATUS ftStatus;
+  FT_HANDLE ftHandle;
+  EVENT_HANDLE eh;
+};
+typedef struct sick_drv sick_drv_t;
 
 int
 send_command (sick_drv_t*);
@@ -119,37 +121,41 @@ send_command (sick_drv_t* self)
 {
   int i;
   DWORD l;
-
   self->frame_errors = 0;
-  sick_clear_buffer(self); // flush receive buffer
-  self->ftStatus = FT_Write(self->ftHandle,
-                              self->sick_cmd,
-                              self->sick_cmd_size, &l); // send command
-  i = data_read(self, self->sick_ans_size + 1, 0); // data read (with timeout)
-  if (i == 1)
+  sick_clear_buffer(self);  // flush receive buffer
+  self->ftStatus = FT_Write(self->ftHandle, self->sick_cmd, self->sick_cmd_size, &l);  // send command
+  i = data_read(self, self->sick_ans_size+1, 0);  // data read (with timeout)
+  if (i == 0)
     {
-      i = find_header(self, self->sick_ans_header,
-                        self->sick_ans_size + 1, 5); // search for frame header
-      if (i >= 0)
+      i = find_header(self, self->sick_ans_header, self->sick_ans_size+1, 5);  // search for frame header
+      if (i>=0)
         {
-          if (self->temp_buffer[i - 1] == SICK_ACK_CHAR)
+          if (self->temp_buffer[i-1] == SICK_ACK_CHAR)
             {
-              if (check_frame(self, &self->temp_buffer[i], self->sick_ans_size)
-                  < 0)
+              printf("Naglowek OK: %d.\n", i);
+              if (check_frame (self, &self->temp_buffer[i],  self->sick_ans_size)<0)
                 {
+                  printf("FRAME ERROR!\n  ");
                   return -1;
                 }
               return 0;
             }
           else
-            return -1;
+            {
+              printf("No ACK char\n");
+              return -1;
+            }
         }
       else
-        return -1;
+        {
+          printf ("No header found\n");
+          return -1;
+        }
     }
   else
     {
-      return self->ftStatus;
+      printf("Error no: %d!!!\n", (int) self->ftStatus);
+      return -1;
     }
 }
 
@@ -177,50 +183,65 @@ send_commands(sick_drv_t* self, int n)
 int
 port_init (sick_drv_t* self)
 {
-  // open communication port
-  self->ftStatus = FT_Open(0, &self->ftHandle);
-  if (!FT_SUCCESS(self->ftStatus))
+  char serialNo[64];
+  char* buffer[2] = {serialNo, NULL};
+  long devNum;
+  if (FT_SUCCESS(self->ftStatus = FT_ListDevices(buffer, &devNum, FT_LIST_ALL | FT_OPEN_BY_SERIAL_NUMBER)))
     {
-      return self->ftStatus;
+      // open communication port
+      printf("FTDI serial no: %s\n", serialNo);
+      if (FT_SUCCESS(self->ftStatus = FT_OpenEx(serialNo, FT_OPEN_BY_SERIAL_NUMBER, &self->ftHandle)))
+        if (FT_SUCCESS(self->ftStatus = FT_SetTimeouts(self->ftHandle, 2000, 2000))) //TODO: change constatnts to parameters
+          {
+            DWORD EventMask = FT_EVENT_RXCHAR | FT_EVENT_MODEM_STATUS;
+            if (FT_SUCCESS(self->ftStatus = FT_SetEventNotification(self->ftHandle, EventMask, (PVOID)&self->eh)))
+              return 0;
+          }
     }
-  if (FT_SUCCESS(self->ftStatus = FT_SetTimeouts(self->ftHandle, 2000, 2000))) //TODO: change constatnts to parameters
-    return 0;
-  else
-    return -1;
+  return self->ftStatus;
 }
 
 //--------------------------------------------------------------------------------------------------------------
 // Funkcja odczytu bufora danych odebranych
 // we: size - liczba znakow do odczytu
 //--------------------------------------------------------------------------------------------------------------
+
+#define min(A, B) (A < B ? A : B)
 int
 data_read(sick_drv_t* self, int size, int offset)
 {
-  int i;
-  DWORD len;
+  DWORD len = size;
+  DWORD EventDWord;
+  DWORD RxBytes;
+  DWORD TxBytes;
 
-  i = 0;
+  while (len > 0)
+    {
+      pthread_mutex_lock(&self->eh.eMutex);
+      printf("after lock\n");
+      pthread_cond_wait(&self->eh.eCondVar, &self->eh.eMutex);
+      printf("after cond wait");
+      pthread_mutex_unlock(&self->eh.eMutex);
 
-  self->ftStatus = FT_Read(self->ftHandle,
-                            &self->temp_buffer[offset], size,
-                            &len);
-  if (FT_SUCCESS(self->ftStatus))
-    {
-      if (len == size)
-        {
-          return 0; // proper data
-        }
-      else
-        {
-          // FT_Read Timeout
-          return -1;
-        }
+      FT_GetStatus(self->ftHandle, &RxBytes, &TxBytes, &EventDWord);
+      printf("RxBytes: %li", (long int)RxBytes);
+      if (RxBytes > 0) {
+        self->ftStatus = FT_Read(self->ftHandle,
+                                   &self->temp_buffer[offset], min(RxBytes, len),
+                                   &len);
+        if (FT_SUCCESS(self->ftStatus))
+          {
+            len -= RxBytes;
+          }
+        else
+          {
+            printf("Status: %i\n", self->ftStatus);
+            return -1;
+            // FT_Read Failed
+          }
+      }
     }
-  else
-    {
-      return -1;
-      // FT_Read Failed
-    }
+  return 0;
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -281,7 +302,10 @@ sick_handle_t
 sick_open ()
 {
   sick_drv_t* self = malloc(sizeof(sick_drv_t));
-  bzero(self->measurement, 362*sizeof(distance_frame_t));
+  bzero(self->measurement, SICK_MAX_FRAMES*sizeof(distance_frame_t));
+  bzero(self->scan, 362*sizeof(unsigned short int));
+  pthread_mutex_init(&self->eh.eMutex, NULL);
+  pthread_cond_init(&self->eh.eCondVar, NULL);
   return self;
 }
 
@@ -326,9 +350,7 @@ sick_configure(sick_handle_t h)
             {
               if (port_set_hi_speed(self) == 0)
               {
-                if (sick_status(h) != 0)
-                return -1;
-                else
+                if (sick_status(h) == 0)
                   {
                     if (go_high_speed(self) != 0) // przelaczenie Sicka na 500kbps
                       return port_set_hi_speed(self); // przelaczenie portu na 500kbps
@@ -336,17 +358,10 @@ sick_configure(sick_handle_t h)
                       return 0;
                   }
               }
-            else
-              return -1;
             }
-          else
-            return -1;
         }
-      else
-        return -1;
     }
-  else
-    return -1;
+  return self->ftStatus;
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -358,6 +373,7 @@ sick_start(sick_handle_t h)
   sick_drv_t* self = (sick_drv_t*) h;
   // zerowanie wskaznikow bufora cyklicznego
   self->index_frame_r = self->index_frame_w = 0;
+  self->tmp_pos = 0;
   // zapisanie czasu poczatkowego
   gettimeofday(&self->start_time, NULL);
 
@@ -366,7 +382,7 @@ sick_start(sick_handle_t h)
   self->sick_cmd_size   = SICK_CMD_START_SIZE;
   self->sick_ans_size   = SICK_ANS_STAT_SIZE;
 
-  return send_command(self);
+  return send_commands(self, 2);
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -403,7 +419,7 @@ int
 sick_read_stream(sick_handle_t h)
 {
   sick_drv_t* self = (sick_drv_t*)h;
-  int i;
+  int i, j;
   int time;
   struct timeval current_time;
 
@@ -417,7 +433,7 @@ sick_read_stream(sick_handle_t h)
     }
 
   // try to get one full frame
-  i = data_read(self, self->sick_ans_size, 0); // data read (with timeout)
+  i = data_read(self, self->sick_ans_size * 2, 0); // data read (with timeout)
   if (i == 0)
     {
       // now search for the frame header
@@ -425,19 +441,21 @@ sick_read_stream(sick_handle_t h)
       // check if you got full frame
       if (i > 0)
         {
+          printf("Header at %i\n", i);
           // no: some data have not been read yet (as a result of some missing characters in the buffer)
           // they must be read to complete the frame
-          self->frame_errors++;
-          return -1; // some error occured
-        }
-      else
-        {
-          // the frame has been completed
-          if (check_frame(self, &self->temp_buffer[i], self->sick_ans_size) != 0)
+          j = data_read(self, i, self->sick_ans_size);
+          if (j < 0)
             {
               self->frame_errors++;
-              return -1;
+              return -1; // some error occured
             }
+        }
+      // the frame has been completed
+      if (check_frame(self, &self->temp_buffer[i], self->sick_ans_size) != 0)
+        {
+          self->frame_errors++;
+          return -1;
         }
     }
   else

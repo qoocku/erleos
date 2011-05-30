@@ -74,12 +74,13 @@ static ERL_NIF_TERM
 _open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   sick_handle*  handle;
+  ERL_NIF_TERM result;
   handle = enif_alloc_resource(sick_handle_type, sizeof(sick_handle));
-  memset(handle, 0, sizeof(sick_handle));
   handle->device = sick_open();
   handle->threaded = 0;
+  result = enif_make_resource(env, handle);
   enif_release_resource(handle);
-  return enif_make_resource(env, handle);
+  return result;
 }
 
 static ERL_NIF_TERM
