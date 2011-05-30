@@ -402,8 +402,8 @@ find_header(sick_drv_t* self,
 int
 sick_read_stream(sick_handle_t h)
 {
-  sick_drv_t* self = (sick_drv_t)h;
-  int i, j;
+  sick_drv_t* self = (sick_drv_t*)h;
+  int i;
   int time;
   struct timeval current_time;
 

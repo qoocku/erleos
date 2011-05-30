@@ -13,4 +13,5 @@
                         erleos_sensor_srv,erleos_sensor_srv_tests,erleos_sup,
                         erleos_us_sensor_module,erleos_utils,
                         erleos_utils_tests,mqueue,mqueue_drv,mqueue_srv,
-                        mqueue_srv_tests,mqueue_tests,tests_runner]}]}.
+                        mqueue_srv_tests,mqueue_tests,sick_drv,
+                        tests_runner]}]}.
