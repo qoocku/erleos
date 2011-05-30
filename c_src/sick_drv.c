@@ -270,22 +270,23 @@ port_set_hi_speed(sick_drv_t* self)
 // Czyszczenie bufora urzadzenia wejciowego FTDI
 //--------------------------------------------------------------------------------------------------------------
 void
-sick_clear_buffer(sick_handler_t h)
+sick_clear_buffer(sick_handle_t h)
 {
   sick_drv_t* self = (sick_drv_t*)h;
   self->ftStatus = FT_Purge(self->ftHandle, FT_PURGE_RX);
 }
 
 
-sick_handler_t
+sick_handle_t
 sick_open ()
 {
   sick_drv_t* self = malloc(sizeof(sick_drv_t));
   bzero(self->measurement, 362*sizeof(distance_frame_t));
+  return self;
 }
 
 void
-sick_close (sick_handler_t h)
+sick_close (sick_handle_t h)
 {
   FT_Close(((sick_drv_t*)h)->ftHandle);
   free((sick_drv_t*)h);
@@ -296,7 +297,7 @@ sick_close (sick_handler_t h)
 //--------------------------------------------------------------------------------------------------------------
 
 int
-sick_status (sick_handler_t h)
+sick_status (sick_handle_t h)
 {
   sick_drv_t* self = (sick_drv_t*)h;
 
@@ -313,7 +314,7 @@ sick_status (sick_handler_t h)
 //--------------------------------------------------------------------------------------------------------------
 
 int
-sick_configure(sick_handler_t h)
+sick_configure(sick_handle_t h)
 {
   sick_drv_t* self = (sick_drv_t*) h;
   if (port_init(self) == 0)
@@ -330,9 +331,9 @@ sick_configure(sick_handler_t h)
                 else
                   {
                     if (go_high_speed(self) != 0) // przelaczenie Sicka na 500kbps
-                    return port_set_hi_speed(self); // przelaczenie portu na 500kbps
+                      return port_set_hi_speed(self); // przelaczenie portu na 500kbps
                     else
-                    return 0;
+                      return 0;
                   }
               }
             else
@@ -352,7 +353,7 @@ sick_configure(sick_handler_t h)
 // Rozpoczecie pomiaru ciaglego
 //--------------------------------------------------------------------------------------------------------------
 int
-sick_start(sick_handler_t h)
+sick_start(sick_handle_t h)
 {
   sick_drv_t* self = (sick_drv_t*) h;
   // zerowanie wskaznikow bufora cyklicznego
@@ -399,9 +400,9 @@ find_header(sick_drv_t* self,
 //--------------------------------------------------------------------------------------------------------------
 
 int
-read_stream(sick_drv_t* self)
+sick_read_stream(sick_handle_t h)
 {
-
+  sick_drv_t* self = (sick_drv_t)h;
   int i, j;
   int time;
   struct timeval current_time;
@@ -426,18 +427,17 @@ read_stream(sick_drv_t* self)
         {
           // no: some data have not been read yet (as a result of some missing characters in the buffer)
           // they must be read to complete the frame
-          j = data_read(self, i, self->sick_ans_size);
-          if (j != 0)
+          self->frame_errors++;
+          return -1; // some error occured
+        }
+      else
+        {
+          // the frame has been completed
+          if (check_frame(self, &self->temp_buffer[i], self->sick_ans_size) != 0)
             {
               self->frame_errors++;
-              return -1; // some error occured
+              return -1;
             }
-        }
-      // the frame has been completed
-      if (check_frame(self, &self->temp_buffer[i], self->sick_ans_size) != 0)
-        {
-          self->frame_errors++;
-          return -1;
         }
     }
   else
@@ -465,7 +465,7 @@ read_stream(sick_drv_t* self)
 }
 
 unsigned short int *
-sick_get_current_scan(sick_handler_t h)
+sick_get_current_scan(sick_handle_t h)
 {
   sick_drv_t* self = (sick_drv_t*) h;
   unsigned int i;
